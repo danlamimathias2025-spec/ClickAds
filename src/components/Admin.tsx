@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { collection, addDoc, serverTimestamp, onSnapshot, deleteDoc, doc, updateDoc, query } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, onSnapshot, deleteDoc, doc, updateDoc, query, getDocs } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { Plus, Trash2, Loader2, ShieldAlert, ArrowLeft, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Trash2, Loader2, ShieldAlert, ArrowLeft, CheckCircle, XCircle, Users, Edit2, Save, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface Ad {
@@ -18,19 +18,70 @@ interface Withdrawal {
   amount: number;
   bankName: string;
   accountNumber: string;
+  accountName: string;
   status: string;
+  createdAt: any;
+}
+
+interface User {
+  id: string;
+  username: string;
+  email: string;
+  welcomeBonus: number;
   createdAt: any;
 }
 
 export function Admin() {
   const [ads, setAds] = useState<Ad[]>([]);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
   const [rewardAmount, setRewardAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState<'ads' | 'withdrawals' | 'users'>('ads');
+  
+  // Edit User State
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editUsername, setEditUsername] = useState('');
+  const [editWelcomeBonus, setEditWelcomeBonus] = useState('');
+  const [editLoading, setEditLoading] = useState(false);
+  const [userStats, setUserStats] = useState<Record<string, { earnings: number, withdrawn: number, balance: number }>>({});
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      const stats: Record<string, { earnings: number, withdrawn: number, balance: number }> = {};
+      for (const user of users) {
+        try {
+          const clicksSnap = await getDocs(collection(db, `users/${user.id}/clicks`));
+          const clicksTotal = clicksSnap.docs.reduce((sum, d) => sum + (d.data().rewardAmount || 0), 0);
+          const earnings = clicksTotal + (user.welcomeBonus || 0);
+          
+          const approvedWithdrawals = withdrawals
+            .filter(w => w.userId === user.id && w.status === 'approved')
+            .reduce((sum, w) => sum + w.amount, 0);
+            
+          const pendingWithdrawals = withdrawals
+            .filter(w => w.userId === user.id && w.status === 'pending')
+            .reduce((sum, w) => sum + w.amount, 0);
+            
+          const balance = earnings - approvedWithdrawals - pendingWithdrawals;
+          
+          stats[user.id] = { earnings, withdrawn: approvedWithdrawals, balance };
+        } catch (err) {
+          console.error(`Failed to fetch stats for user ${user.id}`, err);
+          stats[user.id] = { earnings: user.welcomeBonus || 0, withdrawn: 0, balance: user.welcomeBonus || 0 };
+        }
+      }
+      setUserStats(stats);
+    };
+
+    if (users.length > 0) {
+      fetchStats();
+    }
+  }, [users, withdrawals]);
 
   useEffect(() => {
     const unsubscribeAds = onSnapshot(
@@ -64,9 +115,22 @@ export function Admin() {
       (error) => handleFirestoreError(error, OperationType.LIST, 'withdrawals')
     );
 
+    const unsubscribeUsers = onSnapshot(
+      collection(db, 'users'),
+      (snapshot) => {
+        const usersData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as User[];
+        setUsers(usersData);
+      },
+      (error) => handleFirestoreError(error, OperationType.LIST, 'users')
+    );
+
     return () => {
       unsubscribeAds();
       unsubscribeWithdrawals();
+      unsubscribeUsers();
     };
   }, []);
 
@@ -109,6 +173,37 @@ export function Admin() {
     }
   };
 
+  const handleDeleteUser = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) return;
+    try {
+      await deleteDoc(doc(db, 'users', id));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `users/${id}`);
+    }
+  };
+
+  const handleEditUser = (user: User) => {
+    setEditingUser(user);
+    setEditUsername(user.username);
+    setEditWelcomeBonus((user.welcomeBonus || 0).toString());
+  };
+
+  const handleSaveUser = async () => {
+    if (!editingUser) return;
+    setEditLoading(true);
+    try {
+      await updateDoc(doc(db, 'users', editingUser.id), {
+        username: editUsername,
+        welcomeBonus: parseFloat(editWelcomeBonus) || 0
+      });
+      setEditingUser(null);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${editingUser.id}`);
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
   const pendingWithdrawals = withdrawals.filter(w => w.status === 'pending');
   const withdrawalHistory = withdrawals.filter(w => w.status !== 'pending');
 
@@ -126,11 +221,41 @@ export function Admin() {
         <ShieldAlert className="h-6 w-6 text-red-600 flex-shrink-0 mt-0.5" />
         <div>
           <h2 className="text-lg font-bold text-red-900">Admin Panel</h2>
-          <p className="text-sm text-red-700 mt-1">Manage available advertisements here. Only administrators can see this section.</p>
+          <p className="text-sm text-red-700 mt-1">Manage available advertisements, withdrawals, and users here. Only administrators can see this section.</p>
         </div>
       </div>
 
-      <div className="bg-white shadow-sm border border-gray-200 rounded-xl p-6 mb-8">
+      {/* Tabs */}
+      <div className="flex space-x-2 mb-6 overflow-x-auto pb-2">
+        <button
+          onClick={() => setActiveTab('ads')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${activeTab === 'ads' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
+        >
+          Manage Ads
+        </button>
+        <button
+          onClick={() => setActiveTab('withdrawals')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center ${activeTab === 'withdrawals' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
+        >
+          Withdrawals
+          {pendingWithdrawals.length > 0 && (
+            <span className="ml-2 bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full">
+              {pendingWithdrawals.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('users')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center ${activeTab === 'users' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
+        >
+          <Users className="h-4 w-4 mr-2" />
+          Manage Users
+        </button>
+      </div>
+
+      {activeTab === 'ads' && (
+        <>
+          <div className="bg-white shadow-sm border border-gray-200 rounded-xl p-6 mb-8">
         <h3 className="text-lg font-medium text-gray-900 mb-4">Add New Ad</h3>
         <form onSubmit={handleAddAd} className="space-y-4">
           {error && (
@@ -211,8 +336,12 @@ export function Admin() {
           )}
         </ul>
       </div>
+        </>
+      )}
 
-      <div className="bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden mt-8">
+      {activeTab === 'withdrawals' && (
+        <>
+      <div className="bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden mb-8">
         <div className="px-6 py-4 border-b border-amber-200 bg-amber-50">
           <h3 className="text-lg font-medium text-amber-900">Pending Withdrawals</h3>
         </div>
@@ -231,7 +360,7 @@ export function Admin() {
                   </div>
                   <p className="text-sm font-medium text-green-600 mt-1">Amount: ₦{w.amount.toFixed(2)}</p>
                   <p className="text-xs text-gray-500 mt-1">Bank: {w.bankName}</p>
-                  <p className="text-xs text-gray-500">Account: {w.accountNumber}</p>
+                  <p className="text-xs text-gray-500">Account: {w.accountNumber} ({w.accountName})</p>
                 </div>
                 
                 <div className="flex items-center gap-2">
@@ -277,13 +406,165 @@ export function Admin() {
                   </div>
                   <p className="text-sm font-medium text-green-600 mt-1">Amount: ₦{w.amount.toFixed(2)}</p>
                   <p className="text-xs text-gray-500 mt-1">Bank: {w.bankName}</p>
-                  <p className="text-xs text-gray-500">Account: {w.accountNumber}</p>
+                  <p className="text-xs text-gray-500">Account: {w.accountNumber} ({w.accountName})</p>
                 </div>
               </li>
             ))
           )}
         </ul>
       </div>
+        </>
+      )}
+
+      {activeTab === 'users' && (
+        <div className="bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h3 className="text-lg font-medium text-gray-900">Registered Users</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Earnings (₦)</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Withdrawn (₦)</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Balance (₦)</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {users.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-4 text-center text-sm text-gray-500">No users found.</td>
+                  </tr>
+                ) : (
+                  users.map(user => (
+                    <tr key={user.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0 h-10 w-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                            <span className="text-indigo-600 font-bold text-lg">{user.username.charAt(0).toUpperCase()}</span>
+                          </div>
+                          <div className="ml-4">
+                            <div className="text-sm font-medium text-gray-900">{user.username}</div>
+                            <div className="text-sm text-gray-500">{user.email}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-green-600">
+                          ₦{userStats[user.id] ? userStats[user.id].earnings.toFixed(2) : '...'}
+                        </div>
+                        <div className="text-xs text-gray-500">Base: ₦{(user.welcomeBonus || 0).toFixed(2)}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          ₦{userStats[user.id] ? userStats[user.id].withdrawn.toFixed(2) : '...'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-bold text-gray-900">
+                          ₦{userStats[user.id] ? userStats[user.id].balance.toFixed(2) : '...'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {user.createdAt?.toDate ? user.createdAt.toDate().toLocaleDateString() : 'Unknown'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button
+                          onClick={() => handleEditUser(user)}
+                          className="text-indigo-600 hover:text-indigo-900 mr-4"
+                          title="Edit User"
+                        >
+                          <Edit2 className="h-5 w-5 inline" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteUser(user.id)}
+                          className="text-red-600 hover:text-red-900"
+                          title="Delete User"
+                        >
+                          <Trash2 className="h-5 w-5 inline" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Edit User Modal */}
+      {editingUser && (
+        <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" onClick={() => setEditingUser(null)}></div>
+            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div className="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="sm:flex sm:items-start">
+                  <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-indigo-100 sm:mx-0 sm:h-10 sm:w-10">
+                    <Edit2 className="h-6 w-6 text-indigo-600" aria-hidden="true" />
+                  </div>
+                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">
+                        Edit User: {editingUser.email}
+                      </h3>
+                      <button onClick={() => setEditingUser(null)} className="text-gray-400 hover:text-gray-500">
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+                    <div className="mt-4 space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Username</label>
+                        <input
+                          type="text"
+                          value={editUsername}
+                          onChange={(e) => setEditUsername(e.target.value)}
+                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Welcome Bonus / Base Balance (₦)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={editWelcomeBonus}
+                          onChange={(e) => setEditWelcomeBonus(e.target.value)}
+                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                        />
+                        <p className="mt-1 text-xs text-gray-500">
+                          This value acts as the base balance. The user's total balance is this value + ad earnings - withdrawals.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button
+                  type="button"
+                  onClick={handleSaveUser}
+                  disabled={editLoading}
+                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-70"
+                >
+                  {editLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Changes'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingUser(null)}
+                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

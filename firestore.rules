@@ -37,6 +37,7 @@ service cloud.firestore {
     //   - amount: number (required, positive)
     //   - bankName: string (required)
     //   - accountNumber: string (required)
+    //   - accountName: string (required)
     //   - status: string (required, 'pending', 'approved', 'rejected')
     //   - createdAt: timestamp (required)
     //
@@ -88,23 +89,26 @@ service cloud.firestore {
     }
 
     function isValidWithdrawal(data) {
-      return hasOnlyAllowedFields(['userId', 'username', 'amount', 'bankName', 'accountNumber', 'status', 'createdAt']) &&
+      return hasOnlyAllowedFields(['userId', 'username', 'amount', 'bankName', 'accountNumber', 'accountName', 'status', 'createdAt']) &&
              data.userId is string && data.userId.size() > 0 &&
              data.username is string && data.username.size() > 0 &&
              data.amount is number && data.amount > 0 &&
              data.bankName is string && data.bankName.size() > 0 && data.bankName.size() < 100 &&
              data.accountNumber is string && data.accountNumber.size() > 0 && data.accountNumber.size() < 50 &&
+             data.accountName is string && data.accountName.size() > 0 && data.accountName.size() < 100 &&
              data.status in ['pending', 'approved', 'rejected'] &&
              data.createdAt is timestamp;
     }
 
     // Rules
     match /users/{userId} {
-      allow read: if isOwner(userId);
+      allow read: if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId) && isValidUser(request.resource.data);
-      allow update: if isOwner(userId) && isValidUser(request.resource.data) && 
+      allow update: if (isOwner(userId) && isValidUser(request.resource.data) && 
                     request.resource.data.createdAt == resource.data.createdAt &&
-                    request.resource.data.email == resource.data.email;
+                    request.resource.data.email == resource.data.email) ||
+                    (isAdmin() && isValidUser(request.resource.data));
+      allow delete: if isAdmin();
     }
 
     match /ads/{adId} {
@@ -114,7 +118,7 @@ service cloud.firestore {
     }
 
     match /users/{userId}/clicks/{adId} {
-      allow read: if isOwner(userId);
+      allow read: if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId) && 
                     isValidClick(request.resource.data, adId) &&
                     get(/databases/$(database)/documents/ads/$(adId)).data.rewardAmount == request.resource.data.rewardAmount;

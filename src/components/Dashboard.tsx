@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, doc, setDoc, addDoc, serverTimestamp, getDoc, query, where } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
-import { LogOut, ExternalLink, MousePointerClick, Loader2, ShieldAlert, Clock, Info, Wallet, X } from 'lucide-react';
+import { LogOut, ExternalLink, MousePointerClick, Loader2, ShieldAlert, Clock, Info, Wallet, X, Home, User, Banknote } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const NIGERIAN_BANKS = [
@@ -41,6 +41,7 @@ interface Withdrawal {
   amount: number;
   bankName: string;
   accountNumber: string;
+  accountName: string;
   status: string;
   createdAt: any;
 }
@@ -55,13 +56,14 @@ export function Dashboard() {
   const [verifyingAdId, setVerifyingAdId] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(0);
   
-  // Withdrawal Modal State
-  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  // Withdrawal State
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [bankName, setBankName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
+  const [accountName, setAccountName] = useState('');
   const [withdrawLoading, setWithdrawLoading] = useState(false);
   const [withdrawError, setWithdrawError] = useState('');
+  const [activeTab, setActiveTab] = useState<'home' | 'wallet' | 'withdraw' | 'profile'>('home');
   
   const navigate = useNavigate();
 
@@ -215,13 +217,15 @@ export function Dashboard() {
         amount,
         bankName,
         accountNumber,
+        accountName,
         status: 'pending',
         createdAt: serverTimestamp()
       });
-      setShowWithdrawModal(false);
       setWithdrawAmount('');
       setBankName('');
       setAccountNumber('');
+      setAccountName('');
+      setActiveTab('wallet'); // Go back to wallet to see history
     } catch (err: any) {
       setWithdrawError(err.message || 'Failed to submit withdrawal request.');
       handleFirestoreError(err, OperationType.CREATE, `withdrawals`);
@@ -239,157 +243,173 @@ export function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b border-gray-200">
+    <div className="min-h-screen bg-gray-50 pb-20">
+      <nav className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <MousePointerClick className="h-8 w-8 text-indigo-600" />
               <span className="ml-2 text-xl font-bold text-gray-900">ClickAds</span>
             </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-500 hidden sm:block">
-                Welcome, <span className="font-medium text-gray-900">{username || auth.currentUser?.email}</span>
-              </span>
-              {isAdmin && (
-                <button
-                  onClick={() => navigate('/admin')}
-                  className="inline-flex items-center px-3 py-2 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
-                >
-                  <ShieldAlert className="h-4 w-4 mr-2" />
-                  Admin
-                </button>
-              )}
-              <button
-                onClick={handleSignOut}
-                className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                Sign out
-              </button>
-            </div>
           </div>
         </div>
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Balance Card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center">
-            <div className="h-16 w-16 bg-green-100 rounded-full flex items-center justify-center mr-4">
-              <Wallet className="h-8 w-8 text-green-600" />
-            </div>
-            <div>
-              <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Your Balance</h2>
-              <div className="mt-1 flex items-baseline text-4xl font-extrabold text-green-600">
-                ₦{balance.toFixed(2)}
-              </div>
-            </div>
-          </div>
-          <button
-            onClick={() => setShowWithdrawModal(true)}
-            className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-xl shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
-          >
-            Withdraw Funds
-          </button>
-        </div>
-
-        {welcomeBonus > 0 && clicks.length === 0 && (
-          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 mb-8 flex items-start">
-            <Info className="h-5 w-5 text-indigo-600 mt-0.5 mr-3 flex-shrink-0" />
-            <div>
-              <h3 className="text-indigo-800 font-medium">Welcome Bonus!</h3>
-              <p className="text-indigo-700 text-sm mt-1">
-                You've received a welcome bonus of ₦{welcomeBonus.toFixed(2)}. Start completing tasks to earn more!
-              </p>
-            </div>
-          </div>
-        )}
-
-        {isLimitReached && (
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-8 flex items-start">
-            <Info className="h-5 w-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0" />
-            <div>
-              <h3 className="text-blue-800 font-medium">Daily Limit Reached</h3>
-              <p className="text-blue-700 text-sm mt-1">
-                You have reached your daily earning limit of {DAILY_LIMIT} tasks. Please come back tomorrow for more opportunities!
-              </p>
-            </div>
-          </div>
-        )}
-
-        {verifyingAdId && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-8 flex items-center justify-between animate-pulse">
-            <div className="flex items-center text-amber-800">
-              <Clock className="h-5 w-5 mr-2" />
-              <span className="font-medium">Verifying your visit... Please stay on the page.</span>
-            </div>
-            <div className="text-amber-800 font-bold text-lg">
-              {countdown}s
-            </div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Available Ads */}
-          <div className="lg:col-span-2 space-y-6">
-            <h3 className="text-lg font-bold text-gray-900 flex items-center">
-              Available Tasks
-              <span className="ml-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                {availableAds.length} available
-              </span>
-            </h3>
-            
-            {availableAds.length === 0 ? (
-              <div className="bg-white rounded-xl border border-dashed border-gray-300 p-12 text-center">
-                <MousePointerClick className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">No tasks available</h3>
-                <p className="mt-1 text-sm text-gray-500">Check back later for more earning opportunities.</p>
-              </div>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2">
-                {availableAds.map(ad => (
-                  <div key={ad.id} className={`bg-white rounded-xl shadow-sm border ${verifyingAdId === ad.id ? 'border-amber-400 ring-2 ring-amber-100' : 'border-gray-200'} p-5 transition-all`}>
-                    <h4 className="font-semibold text-gray-900 mb-2 line-clamp-2">{ad.title}</h4>
-                    <div className="flex items-center justify-between mt-4">
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-md text-sm font-medium bg-green-50 text-green-700 border border-green-200">
-                        +₦{ad.rewardAmount.toFixed(2)}
-                      </span>
-                      <button
-                        onClick={() => handleClickAd(ad)}
-                        disabled={verifyingAdId !== null || isLimitReached}
-                        className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white ${
-                          verifyingAdId === ad.id 
-                            ? 'bg-amber-500 hover:bg-amber-600' 
-                            : isLimitReached
-                              ? 'bg-gray-400 cursor-not-allowed'
-                              : 'bg-indigo-600 hover:bg-indigo-700'
-                        } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-70 transition-colors`}
-                      >
-                        {verifyingAdId === ad.id ? (
-                          <>
-                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                            {countdown}s
-                          </>
-                        ) : (
-                          <>
-                            Earn ₦{ad.rewardAmount.toFixed(2)}
-                            <ExternalLink className="ml-2 h-4 w-4" />
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                ))}
+        {activeTab === 'home' && (
+          <div className="space-y-8">
+            {welcomeBonus > 0 && clicks.length === 0 && (
+              <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 flex items-start">
+                <Info className="h-5 w-5 text-indigo-600 mt-0.5 mr-3 flex-shrink-0" />
+                <div>
+                  <h3 className="text-indigo-800 font-medium">Welcome Bonus!</h3>
+                  <p className="text-indigo-700 text-sm mt-1">
+                    You've received a welcome bonus of ₦{welcomeBonus.toFixed(2)}. Start completing tasks to earn more!
+                  </p>
+                </div>
               </div>
             )}
-          </div>
 
-          {/* Withdrawals & Completed Ads */}
-          <div className="space-y-6">
-            {withdrawals.length > 0 && (
-              <div className="mb-8">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">Recent Withdrawals</h3>
+            {isLimitReached && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start">
+                <Info className="h-5 w-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0" />
+                <div>
+                  <h3 className="text-blue-800 font-medium">Daily Limit Reached</h3>
+                  <p className="text-blue-700 text-sm mt-1">
+                    You have reached your daily earning limit of {DAILY_LIMIT} tasks. Please come back tomorrow for more opportunities!
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {verifyingAdId && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between animate-pulse">
+                <div className="flex items-center text-amber-800">
+                  <Clock className="h-5 w-5 mr-2" />
+                  <span className="font-medium">Verifying your visit... Please stay on the page.</span>
+                </div>
+                <div className="text-amber-800 font-bold text-lg">
+                  {countdown}s
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Available Ads */}
+              <div className="space-y-6">
+                <h3 className="text-lg font-bold text-gray-900 flex items-center">
+                  Available Tasks
+                  <span className="ml-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                    {availableAds.length} available
+                  </span>
+                </h3>
+                
+                {availableAds.length === 0 ? (
+                  <div className="bg-white rounded-xl border border-dashed border-gray-300 p-12 text-center">
+                    <MousePointerClick className="mx-auto h-12 w-12 text-gray-400" />
+                    <h3 className="mt-2 text-sm font-medium text-gray-900">No tasks available</h3>
+                    <p className="mt-1 text-sm text-gray-500">Check back later for more earning opportunities.</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-4">
+                    {availableAds.map(ad => (
+                      <div key={ad.id} className={`bg-white rounded-xl shadow-sm border ${verifyingAdId === ad.id ? 'border-amber-400 ring-2 ring-amber-100' : 'border-gray-200'} p-5 transition-all`}>
+                        <h4 className="font-semibold text-gray-900 mb-2 line-clamp-2">{ad.title}</h4>
+                        <div className="flex items-center justify-between mt-4">
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-md text-sm font-medium bg-green-50 text-green-700 border border-green-200">
+                            +₦{ad.rewardAmount.toFixed(2)}
+                          </span>
+                          <button
+                            onClick={() => handleClickAd(ad)}
+                            disabled={verifyingAdId !== null || isLimitReached}
+                            className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white ${
+                              verifyingAdId === ad.id 
+                                ? 'bg-amber-500 hover:bg-amber-600' 
+                                : isLimitReached
+                                  ? 'bg-gray-400 cursor-not-allowed'
+                                  : 'bg-indigo-600 hover:bg-indigo-700'
+                            } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-70 transition-colors`}
+                          >
+                            {verifyingAdId === ad.id ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                {countdown}s
+                              </>
+                            ) : (
+                              <>
+                                Earn ₦{ad.rewardAmount.toFixed(2)}
+                                <ExternalLink className="ml-2 h-4 w-4" />
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Completed Ads */}
+              <div className="space-y-6">
+                <h3 className="text-lg font-bold text-gray-900">Completed Tasks</h3>
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                  {completedAds.length === 0 ? (
+                    <div className="p-6 text-center text-sm text-gray-500">
+                      You haven't completed any tasks yet.
+                    </div>
+                  ) : (
+                    <ul className="divide-y divide-gray-200">
+                      {completedAds.map(ad => (
+                        <li key={ad.id} className="p-4 hover:bg-gray-50 transition-colors">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium text-gray-900 truncate pr-4">{ad.title}</p>
+                            <span className="inline-flex items-center text-xs font-medium text-green-600">
+                              +₦{ad.rewardAmount.toFixed(2)}
+                            </span>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'wallet' && (
+          <div className="space-y-8 max-w-3xl mx-auto">
+            {/* Balance Card */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center">
+                <div className="h-16 w-16 bg-green-100 rounded-full flex items-center justify-center mr-4">
+                  <Wallet className="h-8 w-8 text-green-600" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Your Balance</h2>
+                  <div className="mt-1 flex items-baseline text-4xl font-extrabold text-green-600">
+                    ₦{balance.toFixed(2)}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveTab('withdraw')}
+                className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-xl shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+              >
+                Withdraw Funds
+              </button>
+            </div>
+
+            {/* Withdrawals */}
+            <div className="space-y-6">
+              <h3 className="text-lg font-bold text-gray-900">Withdrawal History</h3>
+              {withdrawals.length === 0 ? (
+                <div className="bg-white rounded-xl border border-dashed border-gray-300 p-12 text-center">
+                  <Wallet className="mx-auto h-12 w-12 text-gray-400" />
+                  <h3 className="mt-2 text-sm font-medium text-gray-900">No withdrawals yet</h3>
+                  <p className="mt-1 text-sm text-gray-500">Your withdrawal history will appear here.</p>
+                </div>
+              ) : (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                   <ul className="divide-y divide-gray-200">
                     {withdrawals.map(w => (
@@ -411,128 +431,161 @@ export function Dashboard() {
                     ))}
                   </ul>
                 </div>
-              </div>
-            )}
-
-            <h3 className="text-lg font-bold text-gray-900">Completed Tasks</h3>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              {completedAds.length === 0 ? (
-                <div className="p-6 text-center text-sm text-gray-500">
-                  You haven't completed any tasks yet.
-                </div>
-              ) : (
-                <ul className="divide-y divide-gray-200">
-                  {completedAds.map(ad => (
-                    <li key={ad.id} className="p-4 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-gray-900 truncate pr-4">{ad.title}</p>
-                        <span className="inline-flex items-center text-xs font-medium text-green-600">
-                          +₦{ad.rewardAmount.toFixed(2)}
-                        </span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
               )}
             </div>
           </div>
-        </div>
-      </main>
+        )}
 
-      {/* Withdrawal Modal */}
-      {showWithdrawModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" onClick={() => setShowWithdrawModal(false)}></div>
-            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-            <div className="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div className="sm:flex sm:items-start">
-                  <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-green-100 sm:mx-0 sm:h-10 sm:w-10">
-                    <Wallet className="h-6 w-6 text-green-600" aria-hidden="true" />
-                  </div>
-                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
-                    <div className="flex justify-between items-center">
-                      <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">
-                        Withdraw Funds
-                      </h3>
-                      <button onClick={() => setShowWithdrawModal(false)} className="text-gray-400 hover:text-gray-500">
-                        <X className="h-5 w-5" />
-                      </button>
-                    </div>
-                    <div className="mt-2">
-                      <p className="text-sm text-gray-500 mb-4">
-                        Available Balance: <span className="font-bold text-gray-900">₦{balance.toFixed(2)}</span>
-                      </p>
-                      
-                      <form onSubmit={handleWithdraw} className="space-y-4">
-                        {withdrawError && (
-                          <div className="text-sm text-red-600 bg-red-50 p-3 rounded-md">{withdrawError}</div>
-                        )}
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">Amount (₦)</label>
-                          <input
-                            type="number"
-                            required
-                            min="1"
-                            max={balance}
-                            step="0.01"
-                            value={withdrawAmount}
-                            onChange={(e) => setWithdrawAmount(e.target.value)}
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
-                            placeholder="500"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">Bank Name</label>
-                          <select
-                            required
-                            value={bankName}
-                            onChange={(e) => setBankName(e.target.value)}
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
-                          >
-                            <option value="" disabled>Select a bank</option>
-                            {NIGERIAN_BANKS.map(bank => (
-                              <option key={bank} value={bank}>{bank}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">Account Number</label>
-                          <input
-                            type="text"
-                            required
-                            value={accountNumber}
-                            onChange={(e) => setAccountNumber(e.target.value)}
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
-                            placeholder="0123456789"
-                          />
-                        </div>
-                        <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
-                          <button
-                            type="submit"
-                            disabled={withdrawLoading || balance <= 0}
-                            className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-70"
-                          >
-                            {withdrawLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Submit Request'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setShowWithdrawModal(false)}
-                            className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:w-auto sm:text-sm"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </form>
-                    </div>
+        {activeTab === 'withdraw' && (
+          <div className="max-w-xl mx-auto space-y-6">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="px-6 py-8 sm:p-10">
+                <div className="flex items-center justify-center mb-6">
+                  <div className="h-16 w-16 bg-green-100 rounded-full flex items-center justify-center">
+                    <Banknote className="h-8 w-8 text-green-600" />
                   </div>
                 </div>
+                <div className="text-center mb-8">
+                  <h2 className="text-2xl font-bold text-gray-900">Withdraw Funds</h2>
+                  <p className="mt-2 text-sm text-gray-500">
+                    Available Balance: <span className="font-bold text-gray-900 text-lg">₦{balance.toFixed(2)}</span>
+                  </p>
+                </div>
+                
+                <form onSubmit={handleWithdraw} className="space-y-5">
+                  {withdrawError && (
+                    <div className="text-sm text-red-600 bg-red-50 p-4 rounded-xl border border-red-100">{withdrawError}</div>
+                  )}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Amount (₦)</label>
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      max={balance}
+                      step="0.01"
+                      value={withdrawAmount}
+                      onChange={(e) => setWithdrawAmount(e.target.value)}
+                      className="block w-full border border-gray-300 rounded-xl shadow-sm py-3 px-4 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm transition-colors"
+                      placeholder="500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Bank Name</label>
+                    <select
+                      required
+                      value={bankName}
+                      onChange={(e) => setBankName(e.target.value)}
+                      className="block w-full border border-gray-300 rounded-xl shadow-sm py-3 px-4 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm transition-colors bg-white"
+                    >
+                      <option value="" disabled>Select a bank</option>
+                      {NIGERIAN_BANKS.map(bank => (
+                        <option key={bank} value={bank}>{bank}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Account Number</label>
+                    <input
+                      type="text"
+                      required
+                      value={accountNumber}
+                      onChange={(e) => setAccountNumber(e.target.value)}
+                      className="block w-full border border-gray-300 rounded-xl shadow-sm py-3 px-4 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm transition-colors"
+                      placeholder="0123456789"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Account Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={accountName}
+                      onChange={(e) => setAccountName(e.target.value)}
+                      className="block w-full border border-gray-300 rounded-xl shadow-sm py-3 px-4 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm transition-colors"
+                      placeholder="John Doe"
+                    />
+                  </div>
+                  <div className="pt-4">
+                    <button
+                      type="submit"
+                      disabled={withdrawLoading || balance <= 0}
+                      className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-base font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-70 transition-colors"
+                    >
+                      {withdrawLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Submit Request'}
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {activeTab === 'profile' && (
+          <div className="max-w-md mx-auto space-y-6">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 text-center">
+              <div className="h-20 w-20 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <User className="h-10 w-10 text-indigo-600" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900">{username || auth.currentUser?.email}</h2>
+              <p className="text-sm text-gray-500 mt-1">{auth.currentUser?.email}</p>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="p-2">
+                {isAdmin && (
+                  <button
+                    onClick={() => navigate('/admin')}
+                    className="w-full flex items-center px-4 py-4 text-sm font-medium text-gray-900 hover:bg-gray-50 rounded-xl transition-colors"
+                  >
+                    <ShieldAlert className="h-5 w-5 text-red-500 mr-3" />
+                    Admin Dashboard
+                  </button>
+                )}
+                <button
+                  onClick={handleSignOut}
+                  className="w-full flex items-center px-4 py-4 text-sm font-medium text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                >
+                  <LogOut className="h-5 w-5 mr-3" />
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* Bottom Navigation */}
+      <div className="fixed bottom-0 w-full bg-white border-t border-gray-200 flex justify-around items-center h-16 z-40 pb-safe">
+        <button 
+          onClick={() => setActiveTab('home')} 
+          className={`flex flex-col items-center justify-center w-full h-full ${activeTab === 'home' ? 'text-indigo-600' : 'text-gray-500 hover:text-gray-900'}`}
+        >
+          <Home className="h-6 w-6" />
+          <span className="text-xs mt-1 font-medium">Tasks</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('wallet')} 
+          className={`flex flex-col items-center justify-center w-full h-full ${activeTab === 'wallet' ? 'text-indigo-600' : 'text-gray-500 hover:text-gray-900'}`}
+        >
+          <Wallet className="h-6 w-6" />
+          <span className="text-xs mt-1 font-medium">Wallet</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('withdraw')} 
+          className={`flex flex-col items-center justify-center w-full h-full ${activeTab === 'withdraw' ? 'text-indigo-600' : 'text-gray-500 hover:text-gray-900'}`}
+        >
+          <Banknote className="h-6 w-6" />
+          <span className="text-xs mt-1 font-medium">Withdraw</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('profile')} 
+          className={`flex flex-col items-center justify-center w-full h-full ${activeTab === 'profile' ? 'text-indigo-600' : 'text-gray-500 hover:text-gray-900'}`}
+        >
+          <User className="h-6 w-6" />
+          <span className="text-xs mt-1 font-medium">Profile</span>
+        </button>
+      </div>
     </div>
   );
 }

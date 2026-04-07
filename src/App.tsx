@@ -10,6 +10,7 @@ import { auth } from './firebase';
 import { Auth } from './components/Auth';
 import { Dashboard } from './components/Dashboard';
 import { Admin } from './components/Admin';
+import { Landing } from './components/Landing';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Loader2 } from 'lucide-react';
 
@@ -41,7 +42,7 @@ export default function App() {
         <Routes>
           <Route 
             path="/" 
-            element={user ? <Dashboard /> : <Navigate to="/auth" replace />} 
+            element={user ? <Dashboard /> : <Landing />} 
           />
           <Route 
             path="/auth" 
