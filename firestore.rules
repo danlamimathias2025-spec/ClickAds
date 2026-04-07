@@ -81,11 +81,12 @@ service cloud.firestore {
              data.createdAt is timestamp;
     }
 
-    function isValidClick(data, adId) {
-      return hasOnlyAllowedFields(['adId', 'rewardAmount', 'clickedAt']) &&
-             data.adId == adId &&
+    function isValidClick(data) {
+      return hasOnlyAllowedFields(['adId', 'rewardAmount', 'clickedAt', 'cycle']) &&
+             data.adId is string &&
              data.rewardAmount is number && data.rewardAmount > 0 &&
-             data.clickedAt is timestamp;
+             data.clickedAt is timestamp &&
+             (!('cycle' in data) || data.cycle is number);
     }
 
     function isValidWithdrawal(data) {
@@ -117,11 +118,11 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    match /users/{userId}/clicks/{adId} {
+    match /users/{userId}/clicks/{clickId} {
       allow read: if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId) && 
-                    isValidClick(request.resource.data, adId) &&
-                    get(/databases/$(database)/documents/ads/$(adId)).data.rewardAmount == request.resource.data.rewardAmount;
+                    isValidClick(request.resource.data) &&
+                    get(/databases/$(database)/documents/ads/$(request.resource.data.adId)).data.rewardAmount == request.resource.data.rewardAmount;
       allow update, delete: if false; // Clicks are immutable
     }
 

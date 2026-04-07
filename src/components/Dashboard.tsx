@@ -28,12 +28,15 @@ interface Ad {
   title: string;
   url: string;
   rewardAmount: number;
+  createdAt?: any;
+  cycle?: number;
 }
 
 interface Click {
   adId: string;
   rewardAmount: number;
   clickedAt?: any;
+  cycle?: number;
 }
 
 interface Withdrawal {
@@ -139,16 +142,24 @@ export function Dashboard() {
       return () => clearTimeout(timer);
     } else if (countdown === 0 && verifyingAdId) {
       const recordClick = async () => {
+        // We need to find the ad with its current cycle
+        const CYCLE_DURATION = 24 * 60 * 60 * 1000;
+        const now = Date.now();
+        
         const ad = ads.find(a => a.id === verifyingAdId);
         if (ad && userId) {
+          const createdAtTime = ad.createdAt?.toDate ? ad.createdAt.toDate().getTime() : now;
+          const currentCycle = Math.floor((now - createdAtTime) / CYCLE_DURATION);
+          
           try {
-            await setDoc(doc(db, 'users', userId, 'clicks', ad.id), {
+            await setDoc(doc(db, 'users', userId, 'clicks', `${ad.id}_${currentCycle}`), {
               adId: ad.id,
               rewardAmount: ad.rewardAmount,
-              clickedAt: serverTimestamp()
+              clickedAt: serverTimestamp(),
+              cycle: currentCycle
             });
           } catch (err) {
-            handleFirestoreError(err, OperationType.CREATE, `users/${userId}/clicks/${ad.id}`);
+            handleFirestoreError(err, OperationType.CREATE, `users/${userId}/clicks/${ad.id}_${currentCycle}`);
           }
         }
         setVerifyingAdId(null);
@@ -176,9 +187,22 @@ export function Dashboard() {
   const totalWithdrawals = withdrawals.filter(w => w.status !== 'rejected').reduce((sum, w) => sum + w.amount, 0);
   const balance = welcomeBonus + totalClicks - totalWithdrawals;
   
-  const clickedAdIds = new Set(clicks.map(c => c.adId));
-  const availableAds = ads.filter(ad => !clickedAdIds.has(ad.id));
-  const completedAds = ads.filter(ad => clickedAdIds.has(ad.id));
+  const CYCLE_DURATION = 24 * 60 * 60 * 1000;
+  const now = Date.now();
+
+  const adsWithCycles = ads.map(ad => {
+    const createdAtTime = ad.createdAt?.toDate ? ad.createdAt.toDate().getTime() : now;
+    const cycle = Math.floor((now - createdAtTime) / CYCLE_DURATION);
+    return {
+      ...ad,
+      cycle
+    };
+  });
+
+  const clickedAdCycleKeys = new Set(clicks.map(c => `${c.adId}_${c.cycle || 0}`));
+  
+  const availableAds = adsWithCycles.filter(ad => !clickedAdCycleKeys.has(`${ad.id}_${ad.cycle}`));
+  const completedAds = adsWithCycles.filter(ad => clickedAdCycleKeys.has(`${ad.id}_${ad.cycle}`));
 
   const DAILY_LIMIT = 20;
   const startOfDay = new Date();
