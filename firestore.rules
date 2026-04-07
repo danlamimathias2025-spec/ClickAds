@@ -12,6 +12,7 @@ service cloud.firestore {
     //   - username: string (required, max 50 chars)
     //   - email: string (required, valid email)
     //   - createdAt: timestamp (required)
+    //   - welcomeBonus: number (optional)
     //
     // Collection: ads
     // Document ID: {adId} (auto-generated)
@@ -27,6 +28,17 @@ service cloud.firestore {
     //   - adId: string (required, matches document ID)
     //   - rewardAmount: number (required, matches ad's rewardAmount)
     //   - clickedAt: timestamp (required)
+    //
+    // Collection: withdrawals
+    // Document ID: {withdrawalId} (auto-generated)
+    // Fields:
+    //   - userId: string (required)
+    //   - username: string (required)
+    //   - amount: number (required, positive)
+    //   - bankName: string (required)
+    //   - accountNumber: string (required)
+    //   - status: string (required, 'pending', 'approved', 'rejected')
+    //   - createdAt: timestamp (required)
     //
     // ===============================================================
 
@@ -53,7 +65,8 @@ service cloud.firestore {
 
     // Domain Validators
     function isValidUser(data) {
-      return hasOnlyAllowedFields(['username', 'email', 'createdAt']) &&
+      return request.resource.data.keys().hasAll(['username', 'email', 'createdAt']) &&
+             (!('welcomeBonus' in data) || (data.welcomeBonus is number && data.welcomeBonus >= 0)) &&
              data.username is string && data.username.size() > 0 && data.username.size() < 50 &&
              data.email is string && isValidEmail(data.email) &&
              data.createdAt is timestamp;
@@ -72,6 +85,17 @@ service cloud.firestore {
              data.adId == adId &&
              data.rewardAmount is number && data.rewardAmount > 0 &&
              data.clickedAt is timestamp;
+    }
+
+    function isValidWithdrawal(data) {
+      return hasOnlyAllowedFields(['userId', 'username', 'amount', 'bankName', 'accountNumber', 'status', 'createdAt']) &&
+             data.userId is string && data.userId.size() > 0 &&
+             data.username is string && data.username.size() > 0 &&
+             data.amount is number && data.amount > 0 &&
+             data.bankName is string && data.bankName.size() > 0 && data.bankName.size() < 100 &&
+             data.accountNumber is string && data.accountNumber.size() > 0 && data.accountNumber.size() < 50 &&
+             data.status in ['pending', 'approved', 'rejected'] &&
+             data.createdAt is timestamp;
     }
 
     // Rules
@@ -95,6 +119,13 @@ service cloud.firestore {
                     isValidClick(request.resource.data, adId) &&
                     get(/databases/$(database)/documents/ads/$(adId)).data.rewardAmount == request.resource.data.rewardAmount;
       allow update, delete: if false; // Clicks are immutable
+    }
+
+    match /withdrawals/{withdrawalId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin());
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.userId && isValidWithdrawal(request.resource.data) && request.resource.data.status == 'pending';
+      allow update: if isAdmin() && isValidWithdrawal(request.resource.data);
+      allow delete: if false;
     }
   }
 }

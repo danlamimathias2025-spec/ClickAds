@@ -28,6 +28,7 @@ export function Auth() {
           await setDoc(doc(db, 'users', user.uid), {
             username,
             email,
+            welcomeBonus: 500,
             createdAt: serverTimestamp()
           });
         } catch (err) {
