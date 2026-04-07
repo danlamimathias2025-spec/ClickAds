@@ -1,0 +1,100 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId} (matches Firebase Auth UID)
+    // Fields:
+    //   - username: string (required, max 50 chars)
+    //   - email: string (required, valid email)
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: ads
+    // Document ID: {adId} (auto-generated)
+    // Fields:
+    //   - title: string (required, max 100 chars)
+    //   - url: string (required, max 500 chars)
+    //   - rewardAmount: number (required, positive)
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: users/{userId}/clicks
+    // Document ID: {adId} (matches the ad clicked)
+    // Fields:
+    //   - adId: string (required, matches document ID)
+    //   - rewardAmount: number (required, matches ad's rewardAmount)
+    //   - clickedAt: timestamp (required)
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.email == "danlamimathias2025@gmail.com";
+    }
+    
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+    
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // Domain Validators
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['username', 'email', 'createdAt']) &&
+             data.username is string && data.username.size() > 0 && data.username.size() < 50 &&
+             data.email is string && isValidEmail(data.email) &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidAd(data) {
+      return hasOnlyAllowedFields(['title', 'url', 'rewardAmount', 'createdAt']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 100 &&
+             data.url is string && data.url.size() > 0 && data.url.size() < 500 &&
+             data.rewardAmount is number && data.rewardAmount > 0 &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidClick(data, adId) {
+      return hasOnlyAllowedFields(['adId', 'rewardAmount', 'clickedAt']) &&
+             data.adId == adId &&
+             data.rewardAmount is number && data.rewardAmount > 0 &&
+             data.clickedAt is timestamp;
+    }
+
+    // Rules
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && 
+                    request.resource.data.createdAt == resource.data.createdAt &&
+                    request.resource.data.email == resource.data.email;
+    }
+
+    match /ads/{adId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin() && isValidAd(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /users/{userId}/clicks/{adId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && 
+                    isValidClick(request.resource.data, adId) &&
+                    get(/databases/$(database)/documents/ads/$(adId)).data.rewardAmount == request.resource.data.rewardAmount;
+      allow update, delete: if false; // Clicks are immutable
+    }
+  }
+}

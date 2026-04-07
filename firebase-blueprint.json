@@ -1,0 +1,89 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A registered user of the ClickAds platform.",
+      "type": "object",
+      "properties": {
+        "username": {
+          "type": "string",
+          "description": "The user's chosen username."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "The user's email address."
+        },
+        "createdAt": {
+          "type": "timestamp",
+          "description": "When the user registered."
+        }
+      },
+      "required": ["username", "email", "createdAt"]
+    },
+    "Ad": {
+      "title": "Ad",
+      "description": "An advertisement link that users can click to earn rewards.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "The title of the ad."
+        },
+        "url": {
+          "type": "string",
+          "description": "The destination URL of the ad."
+        },
+        "rewardAmount": {
+          "type": "number",
+          "description": "The amount earned by clicking this ad."
+        },
+        "createdAt": {
+          "type": "timestamp",
+          "description": "When the ad was created."
+        }
+      },
+      "required": ["title", "url", "rewardAmount", "createdAt"]
+    },
+    "Click": {
+      "title": "Click",
+      "description": "A record of a user clicking an ad to prevent double-claiming.",
+      "type": "object",
+      "properties": {
+        "adId": {
+          "type": "string",
+          "description": "The ID of the ad clicked."
+        },
+        "rewardAmount": {
+          "type": "number",
+          "description": "The amount rewarded for this click."
+        },
+        "clickedAt": {
+          "type": "timestamp",
+          "description": "When the click occurred."
+        }
+      },
+      "required": ["adId", "rewardAmount", "clickedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/User"
+      },
+      "description": "Stores user profiles and balances."
+    },
+    "/ads/{adId}": {
+      "schema": {
+        "$ref": "#/entities/Ad"
+      },
+      "description": "Stores available ads."
+    },
+    "/users/{userId}/clicks/{adId}": {
+      "schema": {
+        "$ref": "#/entities/Click"
+      },
+      "description": "Stores records of ads clicked by the user."
+    }
+  }
+}

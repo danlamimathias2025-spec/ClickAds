@@ -1,0 +1,5 @@
+{
+  "name": "ClickAds",
+  "description": "A platform where users can register, login, and earn rewards by clicking on links.",
+  "requestFramePermissions": []
+}
