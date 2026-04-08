@@ -24,6 +24,11 @@ const NIGERIAN_BANKS = [
   'PiggyVest (Providus)'
 ];
 
+const isFirstFridayOfMonth = () => {
+  const today = new Date();
+  return today.getDay() === 5 && today.getDate() <= 7;
+};
+
 interface Ad {
   id: string;
   title: string;
@@ -197,6 +202,7 @@ export function Dashboard() {
   const totalClicks = clicks.reduce((sum, click) => sum + click.rewardAmount, 0);
   const totalWithdrawals = withdrawals.filter(w => w.status !== 'rejected').reduce((sum, w) => sum + w.amount, 0);
   const balance = welcomeBonus + totalClicks - totalWithdrawals;
+  const canWithdraw = isFirstFridayOfMonth();
   
   const CYCLE_DURATION = 24 * 60 * 60 * 1000;
   const now = Date.now();
@@ -230,6 +236,11 @@ export function Dashboard() {
   const handleWithdraw = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userId) return;
+    
+    if (!canWithdraw) {
+      setWithdrawError('Withdrawals are only available on the first Friday of every month.');
+      return;
+    }
     
     const amount = parseFloat(withdrawAmount);
     if (isNaN(amount) || amount < 5000) {
@@ -533,6 +544,18 @@ export function Dashboard() {
                   </p>
                 </div>
                 
+                {!canWithdraw && (
+                  <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start">
+                    <Info className="h-5 w-5 text-amber-600 mt-0.5 mr-3 flex-shrink-0" />
+                    <div>
+                      <h3 className="text-amber-800 font-medium">Withdrawals Unavailable</h3>
+                      <p className="text-amber-700 text-sm mt-1">
+                        Withdrawals are only available on the <strong>first Friday of every month</strong>. Please check back then to request your funds.
+                      </p>
+                    </div>
+                  </div>
+                )}
+                
                 <form onSubmit={handleWithdraw} className="space-y-5">
                   {withdrawError && (
                     <div className="text-sm text-red-600 bg-red-50 p-4 rounded-xl border border-red-100">{withdrawError}</div>
@@ -547,7 +570,8 @@ export function Dashboard() {
                       step="0.01"
                       value={withdrawAmount}
                       onChange={(e) => setWithdrawAmount(e.target.value)}
-                      className="block w-full border border-gray-300 rounded-xl shadow-sm py-3 px-4 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm transition-colors"
+                      disabled={!canWithdraw || withdrawLoading}
+                      className="block w-full border border-gray-300 rounded-xl shadow-sm py-3 px-4 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm transition-colors disabled:bg-gray-100 disabled:text-gray-500"
                       placeholder="5000"
                     />
                   </div>
@@ -557,7 +581,8 @@ export function Dashboard() {
                       required
                       value={bankName}
                       onChange={(e) => setBankName(e.target.value)}
-                      className="block w-full border border-gray-300 rounded-xl shadow-sm py-3 px-4 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm transition-colors bg-white"
+                      disabled={!canWithdraw || withdrawLoading}
+                      className="block w-full border border-gray-300 rounded-xl shadow-sm py-3 px-4 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm transition-colors bg-white disabled:bg-gray-100 disabled:text-gray-500"
                     >
                       <option value="" disabled>Select a bank</option>
                       {NIGERIAN_BANKS.map(bank => (
@@ -572,7 +597,8 @@ export function Dashboard() {
                       required
                       value={accountNumber}
                       onChange={(e) => setAccountNumber(e.target.value)}
-                      className="block w-full border border-gray-300 rounded-xl shadow-sm py-3 px-4 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm transition-colors"
+                      disabled={!canWithdraw || withdrawLoading}
+                      className="block w-full border border-gray-300 rounded-xl shadow-sm py-3 px-4 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm transition-colors disabled:bg-gray-100 disabled:text-gray-500"
                       placeholder="0123456789"
                     />
                   </div>
@@ -583,15 +609,16 @@ export function Dashboard() {
                       required
                       value={accountName}
                       onChange={(e) => setAccountName(e.target.value)}
-                      className="block w-full border border-gray-300 rounded-xl shadow-sm py-3 px-4 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm transition-colors"
+                      disabled={!canWithdraw || withdrawLoading}
+                      className="block w-full border border-gray-300 rounded-xl shadow-sm py-3 px-4 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm transition-colors disabled:bg-gray-100 disabled:text-gray-500"
                       placeholder="John Doe"
                     />
                   </div>
                   <div className="pt-4">
                     <button
                       type="submit"
-                      disabled={withdrawLoading || balance < 5000}
-                      className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-base font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-70 transition-colors"
+                      disabled={!canWithdraw || withdrawLoading || balance < 5000}
+                      className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-base font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-70 disabled:cursor-not-allowed transition-colors"
                     >
                       {withdrawLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Submit Request'}
                     </button>

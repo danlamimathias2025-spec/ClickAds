@@ -128,7 +128,12 @@ service cloud.firestore {
 
     match /withdrawals/{withdrawalId} {
       allow read: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin());
-      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.userId && isValidWithdrawal(request.resource.data) && request.resource.data.status == 'pending';
+      allow create: if isAuthenticated() && 
+                    request.auth.uid == request.resource.data.userId && 
+                    isValidWithdrawal(request.resource.data) && 
+                    request.resource.data.status == 'pending' &&
+                    request.time.dayOfWeek() == 5 && 
+                    request.time.day() <= 7;
       allow update: if isAdmin() && isValidWithdrawal(request.resource.data);
       allow delete: if false;
     }

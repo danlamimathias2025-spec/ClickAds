@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { collection, addDoc, serverTimestamp, onSnapshot, deleteDoc, doc, updateDoc, query, getDocs } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
-import { Plus, Trash2, Loader2, ShieldAlert, ArrowLeft, CheckCircle, XCircle, Users, Edit2, Save, X } from 'lucide-react';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { db, auth, handleFirestoreError, OperationType } from '../firebase';
+import { Plus, Trash2, Loader2, ShieldAlert, ArrowLeft, CheckCircle, XCircle, Users, Edit2, Save, X, Mail } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface Ad {
@@ -47,6 +48,8 @@ export function Admin() {
   const [editUsername, setEditUsername] = useState('');
   const [editWelcomeBonus, setEditWelcomeBonus] = useState('');
   const [editLoading, setEditLoading] = useState(false);
+  const [resetEmailLoading, setResetEmailLoading] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
   const [userStats, setUserStats] = useState<Record<string, { earnings: number, withdrawn: number, balance: number }>>({});
   const navigate = useNavigate();
 
@@ -197,10 +200,30 @@ export function Admin() {
         welcomeBonus: parseFloat(editWelcomeBonus) || 0
       });
       setEditingUser(null);
+      setActionMessage({ type: 'success', text: 'User updated successfully.' });
+      setTimeout(() => setActionMessage(null), 3000);
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `users/${editingUser.id}`);
+      setActionMessage({ type: 'error', text: 'Failed to update user.' });
+      setTimeout(() => setActionMessage(null), 3000);
     } finally {
       setEditLoading(false);
+    }
+  };
+
+  const handleSendResetEmail = async (email: string, userId: string) => {
+    if (!window.confirm(`Send password reset email to ${email}?`)) return;
+    
+    setResetEmailLoading(userId);
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setActionMessage({ type: 'success', text: `Password reset email sent to ${email}` });
+    } catch (err: any) {
+      console.error(err);
+      setActionMessage({ type: 'error', text: err.message || 'Failed to send reset email' });
+    } finally {
+      setResetEmailLoading(null);
+      setTimeout(() => setActionMessage(null), 3000);
     }
   };
 
@@ -418,8 +441,13 @@ export function Admin() {
 
       {activeTab === 'users' && (
         <div className="bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200">
+          <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
             <h3 className="text-lg font-medium text-gray-900">Registered Users</h3>
+            {actionMessage && (
+              <div className={`px-4 py-2 rounded-md text-sm ${actionMessage.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                {actionMessage.text}
+              </div>
+            )}
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -472,6 +500,14 @@ export function Admin() {
                         {user.createdAt?.toDate ? user.createdAt.toDate().toLocaleDateString() : 'Unknown'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button
+                          onClick={() => handleSendResetEmail(user.email, user.id)}
+                          disabled={resetEmailLoading === user.id}
+                          className="text-blue-600 hover:text-blue-900 mr-4 disabled:opacity-50"
+                          title="Send Password Reset Email"
+                        >
+                          {resetEmailLoading === user.id ? <Loader2 className="h-5 w-5 inline animate-spin" /> : <Mail className="h-5 w-5 inline" />}
+                        </button>
                         <button
                           onClick={() => handleEditUser(user)}
                           className="text-indigo-600 hover:text-indigo-900 mr-4"
