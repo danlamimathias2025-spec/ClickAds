@@ -40,14 +40,19 @@ export function Auth() {
       }
     } catch (err: any) {
       console.error(err);
-      if (err.code === 'auth/operation-not-allowed') {
+      const errorCode = err.code || '';
+      const errorMessage = err.message || '';
+      
+      if (errorCode === 'auth/operation-not-allowed' || errorMessage.includes('auth/operation-not-allowed')) {
         setError('Email/Password authentication is not enabled. Please enable it in the Firebase Console under Authentication > Sign-in method.');
-      } else if (err.code === 'auth/email-already-in-use') {
+      } else if (errorCode === 'auth/email-already-in-use' || errorMessage.includes('auth/email-already-in-use')) {
         setError('This email is already registered. Please log in instead.');
-      } else if (err.code === 'auth/weak-password') {
+      } else if (errorCode === 'auth/weak-password' || errorMessage.includes('auth/weak-password')) {
         setError('Password should be at least 6 characters.');
+      } else if (errorCode === 'auth/invalid-credential' || errorMessage.includes('auth/invalid-credential')) {
+        setError('Invalid email or password.');
       } else {
-        setError(err.message || 'An error occurred during authentication.');
+        setError(errorMessage || 'An error occurred during authentication.');
       }
     } finally {
       setLoading(false);
