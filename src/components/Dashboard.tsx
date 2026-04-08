@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, doc, setDoc, addDoc, serverTimestamp, getDoc, query, where } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
-import { LogOut, ExternalLink, MousePointerClick, Loader2, ShieldAlert, Clock, Info, Wallet, X, Home, User, Banknote } from 'lucide-react';
+import { LogOut, ExternalLink, MousePointerClick, Loader2, ShieldAlert, Clock, Info, Wallet, X, Home, User, Banknote, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'motion/react';
 
 const NIGERIAN_BANKS = [
   'Palmpay',
@@ -57,6 +58,7 @@ export function Dashboard() {
   const [welcomeBonus, setWelcomeBonus] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [verifyingAdId, setVerifyingAdId] = useState<string | null>(null);
+  const [successAdId, setSuccessAdId] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(0);
   
   // Withdrawal State
@@ -141,12 +143,16 @@ export function Dashboard() {
       const timer = setTimeout(() => setCountdown(c => c - 1), 1000);
       return () => clearTimeout(timer);
     } else if (countdown === 0 && verifyingAdId) {
+      const adIdToRecord = verifyingAdId;
+      setVerifyingAdId(null);
+      setSuccessAdId(adIdToRecord);
+      
       const recordClick = async () => {
         // We need to find the ad with its current cycle
         const CYCLE_DURATION = 24 * 60 * 60 * 1000;
         const now = Date.now();
         
-        const ad = ads.find(a => a.id === verifyingAdId);
+        const ad = ads.find(a => a.id === adIdToRecord);
         if (ad && userId) {
           const createdAtTime = ad.createdAt?.toDate ? ad.createdAt.toDate().getTime() : now;
           const currentCycle = Math.floor((now - createdAtTime) / CYCLE_DURATION);
@@ -162,8 +168,13 @@ export function Dashboard() {
             handleFirestoreError(err, OperationType.CREATE, `users/${userId}/clicks/${ad.id}_${currentCycle}`);
           }
         }
-        setVerifyingAdId(null);
+        
+        // Clear success state after animation
+        setTimeout(() => {
+          setSuccessAdId(null);
+        }, 1500);
       };
+      
       recordClick();
     }
   }, [countdown, verifyingAdId, ads, userId]);
@@ -221,8 +232,8 @@ export function Dashboard() {
     if (!userId) return;
     
     const amount = parseFloat(withdrawAmount);
-    if (isNaN(amount) || amount <= 0) {
-      setWithdrawError('Please enter a valid amount.');
+    if (isNaN(amount) || amount < 5000) {
+      setWithdrawError('Minimum withdrawal amount is ₦5,000.');
       return;
     }
     
@@ -282,6 +293,20 @@ export function Dashboard() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeTab === 'home' && (
           <div className="space-y-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Welcome back, {username}! 👋</h2>
+                <p className="text-gray-500 mt-1">Ready to earn some rewards today?</p>
+              </div>
+              <div className="mt-4 sm:mt-0 bg-indigo-50 px-4 py-3 rounded-lg border border-indigo-100 flex items-center">
+                <Wallet className="h-5 w-5 text-indigo-600 mr-2" />
+                <div>
+                  <p className="text-xs text-indigo-800 font-medium uppercase tracking-wider">Current Balance</p>
+                  <p className="text-lg font-bold text-indigo-900">₦{balance.toFixed(2)}</p>
+                </div>
+              </div>
+            </div>
+
             {welcomeBonus > 0 && clicks.length === 0 && (
               <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 flex items-start">
                 <Info className="h-5 w-5 text-indigo-600 mt-0.5 mr-3 flex-shrink-0" />
@@ -336,39 +361,63 @@ export function Dashboard() {
                   </div>
                 ) : (
                   <div className="grid gap-4">
-                    {availableAds.map(ad => (
-                      <div key={ad.id} className={`bg-white rounded-xl shadow-sm border ${verifyingAdId === ad.id ? 'border-amber-400 ring-2 ring-amber-100' : 'border-gray-200'} p-5 transition-all`}>
-                        <h4 className="font-semibold text-gray-900 mb-2 line-clamp-2">{ad.title}</h4>
-                        <div className="flex items-center justify-between mt-4">
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-md text-sm font-medium bg-green-50 text-green-700 border border-green-200">
-                            +₦{ad.rewardAmount.toFixed(2)}
-                          </span>
-                          <button
-                            onClick={() => handleClickAd(ad)}
-                            disabled={verifyingAdId !== null || isLimitReached}
-                            className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white ${
-                              verifyingAdId === ad.id 
-                                ? 'bg-amber-500 hover:bg-amber-600' 
-                                : isLimitReached
-                                  ? 'bg-gray-400 cursor-not-allowed'
-                                  : 'bg-indigo-600 hover:bg-indigo-700'
-                            } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-70 transition-colors`}
-                          >
-                            {verifyingAdId === ad.id ? (
-                              <>
-                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                {countdown}s
-                              </>
-                            ) : (
-                              <>
-                                Earn ₦{ad.rewardAmount.toFixed(2)}
-                                <ExternalLink className="ml-2 h-4 w-4" />
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                    <AnimatePresence mode="popLayout">
+                      {availableAds.map(ad => (
+                        <motion.div 
+                          layout
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
+                          key={ad.id} 
+                          className={`bg-white rounded-xl shadow-sm border ${
+                            successAdId === ad.id 
+                              ? 'border-green-500 ring-2 ring-green-100 bg-green-50' 
+                              : verifyingAdId === ad.id 
+                                ? 'border-amber-400 ring-2 ring-amber-100' 
+                                : 'border-gray-200'
+                          } p-5 transition-all`}
+                        >
+                          <h4 className={`font-semibold mb-2 line-clamp-2 ${successAdId === ad.id ? 'text-green-800' : 'text-gray-900'}`}>{ad.title}</h4>
+                          <div className="flex items-center justify-between mt-4">
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-sm font-medium border ${
+                              successAdId === ad.id ? 'bg-green-100 text-green-800 border-green-300' : 'bg-green-50 text-green-700 border-green-200'
+                            }`}>
+                              +₦{ad.rewardAmount.toFixed(2)}
+                            </span>
+                            <button
+                              onClick={() => handleClickAd(ad)}
+                              disabled={verifyingAdId !== null || successAdId !== null || isLimitReached}
+                              className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white ${
+                                successAdId === ad.id
+                                  ? 'bg-green-500 hover:bg-green-600'
+                                  : verifyingAdId === ad.id 
+                                    ? 'bg-amber-500 hover:bg-amber-600' 
+                                    : isLimitReached
+                                      ? 'bg-gray-400 cursor-not-allowed'
+                                      : 'bg-indigo-600 hover:bg-indigo-700'
+                              } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-70 transition-colors`}
+                            >
+                              {successAdId === ad.id ? (
+                                <>
+                                  <CheckCircle className="h-4 w-4 mr-2" />
+                                  Completed!
+                                </>
+                              ) : verifyingAdId === ad.id ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                  {countdown}s
+                                </>
+                              ) : (
+                                <>
+                                  Earn ₦{ad.rewardAmount.toFixed(2)}
+                                  <ExternalLink className="ml-2 h-4 w-4" />
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
                   </div>
                 )}
               </div>
@@ -383,16 +432,24 @@ export function Dashboard() {
                     </div>
                   ) : (
                     <ul className="divide-y divide-gray-200">
-                      {completedAds.map(ad => (
-                        <li key={ad.id} className="p-4 hover:bg-gray-50 transition-colors">
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm font-medium text-gray-900 truncate pr-4">{ad.title}</p>
-                            <span className="inline-flex items-center text-xs font-medium text-green-600">
-                              +₦{ad.rewardAmount.toFixed(2)}
-                            </span>
-                          </div>
-                        </li>
-                      ))}
+                      <AnimatePresence initial={false}>
+                        {completedAds.map(ad => (
+                          <motion.li 
+                            layout
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            key={ad.id} 
+                            className="p-4 hover:bg-gray-50 transition-colors overflow-hidden"
+                          >
+                            <div className="flex items-center justify-between">
+                              <p className="text-sm font-medium text-gray-900 truncate pr-4">{ad.title}</p>
+                              <span className="inline-flex items-center text-xs font-medium text-green-600">
+                                +₦{ad.rewardAmount.toFixed(2)}
+                              </span>
+                            </div>
+                          </motion.li>
+                        ))}
+                      </AnimatePresence>
                     </ul>
                   )}
                 </div>
@@ -485,13 +542,13 @@ export function Dashboard() {
                     <input
                       type="number"
                       required
-                      min="1"
+                      min="5000"
                       max={balance}
                       step="0.01"
                       value={withdrawAmount}
                       onChange={(e) => setWithdrawAmount(e.target.value)}
                       className="block w-full border border-gray-300 rounded-xl shadow-sm py-3 px-4 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm transition-colors"
-                      placeholder="500"
+                      placeholder="5000"
                     />
                   </div>
                   <div>
@@ -533,7 +590,7 @@ export function Dashboard() {
                   <div className="pt-4">
                     <button
                       type="submit"
-                      disabled={withdrawLoading || balance <= 0}
+                      disabled={withdrawLoading || balance < 5000}
                       className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-base font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-70 transition-colors"
                     >
                       {withdrawLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Submit Request'}

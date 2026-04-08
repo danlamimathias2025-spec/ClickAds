@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import { Mail, Lock, User, ArrowRight, Loader2 } from 'lucide-react';
@@ -10,11 +10,14 @@ export function Auth() {
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [error, setError] = useState('');
+  const [resetMessage, setResetMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setResetMessage('');
     setLoading(true);
 
     try {
@@ -39,11 +42,42 @@ export function Auth() {
       console.error(err);
       if (err.code === 'auth/operation-not-allowed') {
         setError('Email/Password authentication is not enabled. Please enable it in the Firebase Console under Authentication > Sign-in method.');
+      } else if (err.code === 'auth/email-already-in-use') {
+        setError('This email is already registered. Please log in instead.');
+      } else if (err.code === 'auth/weak-password') {
+        setError('Password should be at least 6 characters.');
       } else {
         setError(err.message || 'An error occurred during authentication.');
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!email) {
+      setError('Please enter your email address first.');
+      return;
+    }
+    
+    setError('');
+    setResetMessage('');
+    setResetLoading(true);
+    
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setResetMessage('Password reset email sent! Check your inbox.');
+    } catch (err: any) {
+      console.error(err);
+      if (err.code === 'auth/user-not-found') {
+        setError('No user found with this email address.');
+      } else if (err.code === 'auth/invalid-email') {
+        setError('Please enter a valid email address.');
+      } else {
+        setError(err.message || 'Failed to send password reset email.');
+      }
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -71,6 +105,11 @@ export function Auth() {
           {error && (
             <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-md">
               <p className="text-sm text-red-700">{error}</p>
+            </div>
+          )}
+          {resetMessage && (
+            <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-md">
+              <p className="text-sm text-green-700">{resetMessage}</p>
             </div>
           )}
           <div className="space-y-4">
@@ -109,7 +148,19 @@ export function Auth() {
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-gray-700">Password</label>
+                {isLogin && (
+                  <button
+                    type="button"
+                    onClick={handleResetPassword}
+                    disabled={resetLoading}
+                    className="text-sm font-medium text-indigo-600 hover:text-indigo-500 transition-colors disabled:opacity-70"
+                  >
+                    {resetLoading ? 'Sending...' : 'Forgot password?'}
+                  </button>
+                )}
+              </div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Lock className="h-5 w-5 text-gray-400" />

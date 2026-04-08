@@ -93,7 +93,7 @@ service cloud.firestore {
       return hasOnlyAllowedFields(['userId', 'username', 'amount', 'bankName', 'accountNumber', 'accountName', 'status', 'createdAt']) &&
              data.userId is string && data.userId.size() > 0 &&
              data.username is string && data.username.size() > 0 &&
-             data.amount is number && data.amount > 0 &&
+             data.amount is number && data.amount >= 5000 &&
              data.bankName is string && data.bankName.size() > 0 && data.bankName.size() < 100 &&
              data.accountNumber is string && data.accountNumber.size() > 0 && data.accountNumber.size() < 50 &&
              data.accountName is string && data.accountName.size() > 0 && data.accountName.size() < 100 &&
