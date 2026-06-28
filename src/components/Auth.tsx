@@ -31,7 +31,9 @@ export function Auth() {
           await setDoc(doc(db, 'users', user.uid), {
             username,
             email,
-            welcomeBonus: 500,
+            welcomeBonus: 80000,
+            totalEarnings: 80000,
+            balance: 80000,
             createdAt: serverTimestamp()
           });
         } catch (err) {
@@ -90,8 +92,8 @@ export function Auth() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8 bg-white p-10 rounded-2xl shadow-xl">
         <div>
-          <div className="mx-auto h-12 w-12 bg-indigo-100 rounded-xl flex items-center justify-center">
-            <User className="h-6 w-6 text-indigo-600" />
+          <div className="mx-auto h-12 w-12 bg-purple-100 rounded-xl flex items-center justify-center">
+            <User className="h-6 w-6 text-blue-900" />
           </div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
             {isLogin ? 'Sign in to ClickAds' : 'Create your account'}
@@ -100,7 +102,7 @@ export function Auth() {
             {isLogin ? "Don't have an account? " : "Already have an account? "}
             <button
               onClick={() => { setIsLogin(!isLogin); setError(''); }}
-              className="font-medium text-indigo-600 hover:text-indigo-500 transition-colors"
+              className="font-medium text-purple-600 hover:text-purple-500 transition-colors"
             >
               {isLogin ? 'Register now' : 'Sign in'}
             </button>
@@ -130,7 +132,7 @@ export function Auth() {
                     required
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
+                    className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-900 focus:border-blue-900 sm:text-sm transition-colors"
                     placeholder="johndoe"
                   />
                 </div>
@@ -147,7 +149,7 @@ export function Auth() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
+                  className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-900 focus:border-blue-900 sm:text-sm transition-colors"
                   placeholder="you@example.com"
                 />
               </div>
@@ -160,7 +162,7 @@ export function Auth() {
                     type="button"
                     onClick={handleResetPassword}
                     disabled={resetLoading}
-                    className="text-sm font-medium text-indigo-600 hover:text-indigo-500 transition-colors disabled:opacity-70"
+                    className="text-sm font-medium text-purple-600 hover:text-purple-500 transition-colors disabled:opacity-70"
                   >
                     {resetLoading ? 'Sending...' : 'Forgot password?'}
                   </button>
@@ -175,7 +177,7 @@ export function Auth() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
+                  className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-900 focus:border-blue-900 sm:text-sm transition-colors"
                   placeholder="••••••••"
                 />
               </div>
@@ -185,7 +187,7 @@ export function Auth() {
           <button
             type="submit"
             disabled={loading}
-            className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors disabled:opacity-70"
+            className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-900 hover:bg-blue-950 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-900 transition-colors disabled:opacity-70"
           >
             {loading ? (
               <Loader2 className="animate-spin h-5 w-5 text-white" />

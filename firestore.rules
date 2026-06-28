@@ -2,140 +2,63 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    //
-    // Collection: users
-    // Document ID: {userId} (matches Firebase Auth UID)
-    // Fields:
-    //   - username: string (required, max 50 chars)
-    //   - email: string (required, valid email)
-    //   - createdAt: timestamp (required)
-    //   - welcomeBonus: number (optional)
-    //
-    // Collection: ads
-    // Document ID: {adId} (auto-generated)
-    // Fields:
-    //   - title: string (required, max 100 chars)
-    //   - url: string (required, max 500 chars)
-    //   - rewardAmount: number (required, positive)
-    //   - createdAt: timestamp (required)
-    //
-    // Collection: users/{userId}/clicks
-    // Document ID: {adId} (matches the ad clicked)
-    // Fields:
-    //   - adId: string (required, matches document ID)
-    //   - rewardAmount: number (required, matches ad's rewardAmount)
-    //   - clickedAt: timestamp (required)
-    //
-    // Collection: withdrawals
-    // Document ID: {withdrawalId} (auto-generated)
-    // Fields:
-    //   - userId: string (required)
-    //   - username: string (required)
-    //   - amount: number (required, positive)
-    //   - bankName: string (required)
-    //   - accountNumber: string (required)
-    //   - accountName: string (required)
-    //   - status: string (required, 'pending', 'approved', 'rejected')
-    //   - createdAt: timestamp (required)
-    //
-    // ===============================================================
-
     // Helper Functions
     function isAuthenticated() {
       return request.auth != null;
     }
     
+    function isAdmin() {
+      return isAuthenticated() && 
+             (request.auth.token.email == "danlamimathias2025@gmail.com" || 
+              request.auth.uid == "CB4PNtbKR8YKdKJlAtohIn0W35R2");
+    }
+    
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
-    
-    function isAdmin() {
-      return isAuthenticated() && request.auth.token.email == "danlamimathias2025@gmail.com";
-    }
-    
-    function hasOnlyAllowedFields(fields) {
-      return request.resource.data.keys().hasOnly(fields);
-    }
-    
-    function isValidEmail(email) {
-      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+
+    // Admin Bypass
+    match /{path=**} {
+      allow read, write: if isAdmin();
     }
 
-    // Domain Validators
-    function isValidUser(data) {
-      return request.resource.data.keys().hasAll(['username', 'email', 'createdAt']) &&
-             (!('welcomeBonus' in data) || (data.welcomeBonus is number && data.welcomeBonus >= 0)) &&
-             data.username is string && data.username.size() > 0 && data.username.size() < 50 &&
-             data.email is string && isValidEmail(data.email) &&
-             data.createdAt is timestamp;
-    }
-
-    function isValidAd(data) {
-      return hasOnlyAllowedFields(['title', 'url', 'rewardAmount', 'createdAt']) &&
-             data.title is string && data.title.size() > 0 && data.title.size() < 100 &&
-             data.url is string && data.url.size() > 0 && data.url.size() < 500 &&
-             data.rewardAmount is number && data.rewardAmount > 0 &&
-             data.createdAt is timestamp;
-    }
-
-    function isValidClick(data) {
-      return hasOnlyAllowedFields(['adId', 'rewardAmount', 'clickedAt', 'cycle']) &&
-             data.adId is string &&
-             data.rewardAmount is number && data.rewardAmount > 0 &&
-             data.clickedAt is timestamp &&
-             (!('cycle' in data) || data.cycle is number);
-    }
-
-    function isValidWithdrawal(data) {
-      return hasOnlyAllowedFields(['userId', 'username', 'amount', 'bankName', 'accountNumber', 'accountName', 'status', 'createdAt']) &&
-             data.userId is string && data.userId.size() > 0 &&
-             data.username is string && data.username.size() > 0 &&
-             data.amount is number && data.amount >= 5000 &&
-             data.bankName is string && data.bankName.size() > 0 && data.bankName.size() < 100 &&
-             data.accountNumber is string && data.accountNumber.size() > 0 && data.accountNumber.size() < 50 &&
-             data.accountName is string && data.accountName.size() > 0 && data.accountName.size() < 100 &&
-             data.status in ['pending', 'approved', 'rejected'] &&
-             data.createdAt is timestamp;
-    }
-
-    // Rules
+    // User Rules
     match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId) && isValidUser(request.resource.data);
-      allow update: if (isOwner(userId) && isValidUser(request.resource.data) && 
-                    request.resource.data.createdAt == resource.data.createdAt &&
-                    request.resource.data.email == resource.data.email) ||
-                    (isAdmin() && isValidUser(request.resource.data));
-      allow delete: if isAdmin();
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      
+      match /checkins/{checkinId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId);
+      }
+      
+      match /achievements/{achievementId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId);
+      }
+      
+      match /clicks/{clickId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId);
+      }
     }
 
+    // Ad Rules
     match /ads/{adId} {
       allow read: if isAuthenticated();
-      allow create, update: if isAdmin() && isValidAd(request.resource.data);
-      allow delete: if isAdmin();
     }
 
-    match /users/{userId}/clicks/{clickId} {
-      allow read: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId) && 
-                    isValidClick(request.resource.data) &&
-                    get(/databases/$(database)/documents/ads/$(request.resource.data.adId)).data.rewardAmount == request.resource.data.rewardAmount;
-      allow update, delete: if false; // Clicks are immutable
-    }
-
+    // Withdrawal Rules
     match /withdrawals/{withdrawalId} {
-      allow read: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin());
-      allow create: if isAuthenticated() && 
-                    request.auth.uid == request.resource.data.userId && 
-                    isValidWithdrawal(request.resource.data) && 
-                    request.resource.data.status == 'pending' &&
-                    request.time.dayOfWeek() == 5 && 
-                    request.time.day() <= 7;
-      allow update: if isAdmin() && isValidWithdrawal(request.resource.data);
-      allow delete: if false;
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.userId);
+      allow create: if isAuthenticated() && (request.auth.uid == request.resource.data.userId);
+    }
+
+    // Global Activity Rules
+    match /activities/{activityId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (request.auth.uid == request.resource.data.userId);
     }
   }
 }

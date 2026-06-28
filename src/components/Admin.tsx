@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { collection, addDoc, serverTimestamp, onSnapshot, deleteDoc, doc, updateDoc, query, getDocs } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, onSnapshot, deleteDoc, doc, updateDoc, query, getDocs, writeBatch } from 'firebase/firestore';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
-import { Plus, Trash2, Loader2, ShieldAlert, ArrowLeft, CheckCircle, XCircle, Users, Edit2, Save, X, Mail } from 'lucide-react';
+import { Plus, Trash2, Loader2, ShieldAlert, ArrowLeft, CheckCircle, XCircle, Users, Edit2, Save, X, Mail, RefreshCcw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface Ad {
@@ -49,18 +49,23 @@ export function Admin() {
   const [editWelcomeBonus, setEditWelcomeBonus] = useState('');
   const [editLoading, setEditLoading] = useState(false);
   const [resetEmailLoading, setResetEmailLoading] = useState<string | null>(null);
+  const [resetAppLoading, setResetAppLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
-  const [userStats, setUserStats] = useState<Record<string, { earnings: number, withdrawn: number, balance: number }>>({});
+  const [userStats, setUserStats] = useState<Record<string, { earnings: number, withdrawn: number, balance: number, checkins: number }>>({});
   const navigate = useNavigate();
 
   useEffect(() => {
     const fetchStats = async () => {
-      const stats: Record<string, { earnings: number, withdrawn: number, balance: number }> = {};
+      const stats: Record<string, { earnings: number, withdrawn: number, balance: number, checkins: number }> = {};
       for (const user of users) {
         try {
           const clicksSnap = await getDocs(collection(db, `users/${user.id}/clicks`));
           const clicksTotal = clicksSnap.docs.reduce((sum, d) => sum + (d.data().rewardAmount || 0), 0);
-          const earnings = clicksTotal + (user.welcomeBonus || 0);
+          
+          const checkinsSnap = await getDocs(collection(db, `users/${user.id}/checkins`));
+          const checkinsTotal = checkinsSnap.docs.reduce((sum, d) => sum + (d.data().rewardAmount || 0), 0);
+          
+          const earnings = clicksTotal + checkinsTotal + (user.welcomeBonus || 0);
           
           const approvedWithdrawals = withdrawals
             .filter(w => w.userId === user.id && w.status === 'approved')
@@ -72,10 +77,10 @@ export function Admin() {
             
           const balance = earnings - approvedWithdrawals - pendingWithdrawals;
           
-          stats[user.id] = { earnings, withdrawn: approvedWithdrawals, balance };
+          stats[user.id] = { earnings, withdrawn: approvedWithdrawals, balance, checkins: checkinsTotal };
         } catch (err) {
           console.error(`Failed to fetch stats for user ${user.id}`, err);
-          stats[user.id] = { earnings: user.welcomeBonus || 0, withdrawn: 0, balance: user.welcomeBonus || 0 };
+          stats[user.id] = { earnings: user.welcomeBonus || 0, withdrawn: 0, balance: user.welcomeBonus || 0, checkins: 0 };
         }
       }
       setUserStats(stats);
@@ -227,8 +232,44 @@ export function Admin() {
     }
   };
 
-  const pendingWithdrawals = withdrawals.filter(w => w.status === 'pending');
-  const withdrawalHistory = withdrawals.filter(w => w.status !== 'pending');
+  const handleResetApp = async () => {
+    if (!window.confirm('CRITICAL ACTION: This will delete ALL users (except admin), ALL clicks, ALL withdrawals, and ALL check-ins. Are you absolutely sure?')) return;
+    
+    setResetAppLoading(true);
+    try {
+      const batch = writeBatch(db);
+      
+      // 1. Delete all withdrawals
+      const withdrawalsSnap = await getDocs(collection(db, 'withdrawals'));
+      withdrawalsSnap.docs.forEach(d => batch.delete(d.ref));
+      
+      // 2. Delete all users except admin and their subcollections
+      const usersSnap = await getDocs(collection(db, 'users'));
+      for (const userDoc of usersSnap.docs) {
+        if (userDoc.data().email === 'danlamimathias2025@gmail.com') continue;
+        
+        const clicksSnap = await getDocs(collection(db, `users/${userDoc.id}/clicks`));
+        clicksSnap.docs.forEach(d => batch.delete(d.ref));
+        
+        const checkinsSnap = await getDocs(collection(db, `users/${userDoc.id}/checkins`));
+        checkinsSnap.docs.forEach(d => batch.delete(d.ref));
+        
+        batch.delete(userDoc.ref);
+      }
+      
+      await batch.commit();
+      setActionMessage({ type: 'success', text: 'Application reset successfully.' });
+    } catch (err: any) {
+      console.error(err);
+      setActionMessage({ type: 'error', text: err.message || 'Failed to reset application' });
+    } finally {
+      setResetAppLoading(false);
+      setTimeout(() => setActionMessage(null), 3000);
+    }
+  };
+
+  const pendingWithdrawals = withdrawals.filter(w => w.status === 'pending' || w.status === 'processing');
+  const withdrawalHistory = withdrawals.filter(w => w.status !== 'pending' && w.status !== 'processing');
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
@@ -240,25 +281,35 @@ export function Admin() {
         Back to Dashboard
       </button>
 
-      <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-8 flex items-start space-x-4">
-        <ShieldAlert className="h-6 w-6 text-red-600 flex-shrink-0 mt-0.5" />
-        <div>
-          <h2 className="text-lg font-bold text-red-900">Admin Panel</h2>
-          <p className="text-sm text-red-700 mt-1">Manage available advertisements, withdrawals, and users here. Only administrators can see this section.</p>
+      <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-8 flex items-start justify-between">
+        <div className="flex items-start space-x-4">
+          <ShieldAlert className="h-6 w-6 text-red-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <h2 className="text-lg font-bold text-red-900">Admin Panel</h2>
+            <p className="text-sm text-red-700 mt-1">Manage available advertisements, withdrawals, and users here. Only administrators can see this section.</p>
+          </div>
         </div>
+        <button
+          onClick={handleResetApp}
+          disabled={resetAppLoading}
+          className="inline-flex items-center px-4 py-2 border border-red-300 text-sm font-medium rounded-lg text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors disabled:opacity-50"
+        >
+          {resetAppLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCcw className="h-4 w-4 mr-2" />}
+          Reset Application
+        </button>
       </div>
 
       {/* Tabs */}
       <div className="flex space-x-2 mb-6 overflow-x-auto pb-2">
         <button
           onClick={() => setActiveTab('ads')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${activeTab === 'ads' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
+          className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${activeTab === 'ads' ? 'bg-blue-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
         >
           Manage Ads
         </button>
         <button
           onClick={() => setActiveTab('withdrawals')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center ${activeTab === 'withdrawals' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
+          className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center ${activeTab === 'withdrawals' ? 'bg-blue-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
         >
           Withdrawals
           {pendingWithdrawals.length > 0 && (
@@ -269,7 +320,7 @@ export function Admin() {
         </button>
         <button
           onClick={() => setActiveTab('users')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center ${activeTab === 'users' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
+          className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center ${activeTab === 'users' ? 'bg-blue-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
         >
           <Users className="h-4 w-4 mr-2" />
           Manage Users
@@ -292,7 +343,7 @@ export function Admin() {
                 required
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-900 focus:border-blue-900 sm:text-sm"
                 placeholder="Click here to earn ₦50!"
               />
             </div>
@@ -303,7 +354,7 @@ export function Admin() {
                 required
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-900 focus:border-blue-900 sm:text-sm"
                 placeholder="https://example.com"
               />
             </div>
@@ -316,7 +367,7 @@ export function Admin() {
                 required
                 value={rewardAmount}
                 onChange={(e) => setRewardAmount(e.target.value)}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-900 focus:border-blue-900 sm:text-sm"
                 placeholder="50.00"
               />
             </div>
@@ -324,7 +375,7 @@ export function Admin() {
           <button
             type="submit"
             disabled={loading}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-70"
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-900 hover:bg-blue-950 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-900 disabled:opacity-70"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
             Add Ad
@@ -345,7 +396,7 @@ export function Admin() {
                 <div>
                   <h4 className="text-sm font-medium text-gray-900">{ad.title}</h4>
                   <p className="text-sm text-gray-500 mt-1">{ad.url}</p>
-                  <p className="text-xs font-medium text-green-600 mt-1">Reward: ₦{ad.rewardAmount.toFixed(2)}</p>
+                  <p className="text-xs font-medium text-green-600 mt-1">Reward: ₦{ad.rewardAmount.toLocaleString()}</p>
                 </div>
                 <button
                   onClick={() => handleDeleteAd(ad.id)}
@@ -377,22 +428,32 @@ export function Admin() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h4 className="text-sm font-bold text-gray-900">{w.username}</h4>
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                      Pending
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      w.status === 'processing' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
+                    }`}>
+                      {w.status === 'processing' ? 'Processing' : 'Pending'}
                     </span>
                   </div>
-                  <p className="text-sm font-medium text-green-600 mt-1">Amount: ₦{w.amount.toFixed(2)}</p>
+                  <p className="text-sm font-medium text-green-600 mt-1">Amount: ₦{w.amount.toLocaleString()}</p>
                   <p className="text-xs text-gray-500 mt-1">Bank: {w.bankName}</p>
                   <p className="text-xs text-gray-500">Account: {w.accountNumber} ({w.accountName})</p>
                 </div>
                 
                 <div className="flex items-center gap-2">
+                  {w.status === 'pending' && (
+                    <button
+                      onClick={() => handleUpdateWithdrawalStatus(w.id, 'processing')}
+                      className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      Process
+                    </button>
+                  )}
                   <button
                     onClick={() => handleUpdateWithdrawalStatus(w.id, 'approved')}
                     className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                   >
                     <CheckCircle className="h-4 w-4 mr-1" />
-                    Approve
+                    Complete
                   </button>
                   <button
                     onClick={() => handleUpdateWithdrawalStatus(w.id, 'rejected')}
@@ -424,10 +485,10 @@ export function Admin() {
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                       w.status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                     }`}>
-                      {w.status.charAt(0).toUpperCase() + w.status.slice(1)}
+                      {w.status === 'approved' ? 'Completed' : 'Rejected'}
                     </span>
                   </div>
-                  <p className="text-sm font-medium text-green-600 mt-1">Amount: ₦{w.amount.toFixed(2)}</p>
+                  <p className="text-sm font-medium text-green-600 mt-1">Amount: ₦{w.amount.toLocaleString()}</p>
                   <p className="text-xs text-gray-500 mt-1">Bank: {w.bankName}</p>
                   <p className="text-xs text-gray-500">Account: {w.accountNumber} ({w.accountName})</p>
                 </div>
@@ -471,8 +532,8 @@ export function Admin() {
                     <tr key={user.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10 bg-indigo-100 rounded-full flex items-center justify-center">
-                            <span className="text-indigo-600 font-bold text-lg">{user.username.charAt(0).toUpperCase()}</span>
+                          <div className="flex-shrink-0 h-10 w-10 bg-purple-100 rounded-full flex items-center justify-center">
+                            <span className="text-blue-900 font-bold text-lg">{user.username.charAt(0).toUpperCase()}</span>
                           </div>
                           <div className="ml-4">
                             <div className="text-sm font-medium text-gray-900">{user.username}</div>
@@ -482,18 +543,21 @@ export function Admin() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-green-600">
-                          ₦{userStats[user.id] ? userStats[user.id].earnings.toFixed(2) : '...'}
+                          ₦{userStats[user.id] ? userStats[user.id].earnings.toLocaleString() : '...'}
                         </div>
-                        <div className="text-xs text-gray-500">Base: ₦{(user.welcomeBonus || 0).toFixed(2)}</div>
+                        <div className="text-xs text-gray-500">Base: ₦{(user.welcomeBonus || 0).toLocaleString()}</div>
+                        {userStats[user.id] && userStats[user.id].checkins > 0 && (
+                          <div className="text-xs text-blue-500">Check-ins: ₦{userStats[user.id].checkins.toLocaleString()}</div>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">
-                          ₦{userStats[user.id] ? userStats[user.id].withdrawn.toFixed(2) : '...'}
+                          ₦{userStats[user.id] ? userStats[user.id].withdrawn.toLocaleString() : '...'}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-bold text-gray-900">
-                          ₦{userStats[user.id] ? userStats[user.id].balance.toFixed(2) : '...'}
+                          ₦{userStats[user.id] ? userStats[user.id].balance.toLocaleString() : '...'}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -510,7 +574,7 @@ export function Admin() {
                         </button>
                         <button
                           onClick={() => handleEditUser(user)}
-                          className="text-indigo-600 hover:text-indigo-900 mr-4"
+                          className="text-blue-900 hover:text-blue-950 mr-4"
                           title="Edit User"
                         >
                           <Edit2 className="h-5 w-5 inline" />
@@ -541,8 +605,8 @@ export function Admin() {
             <div className="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
               <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                 <div className="sm:flex sm:items-start">
-                  <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-indigo-100 sm:mx-0 sm:h-10 sm:w-10">
-                    <Edit2 className="h-6 w-6 text-indigo-600" aria-hidden="true" />
+                  <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-purple-100 sm:mx-0 sm:h-10 sm:w-10">
+                    <Edit2 className="h-6 w-6 text-blue-900" aria-hidden="true" />
                   </div>
                   <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
                     <div className="flex justify-between items-center">
@@ -560,7 +624,7 @@ export function Admin() {
                           type="text"
                           value={editUsername}
                           onChange={(e) => setEditUsername(e.target.value)}
-                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-900 focus:border-blue-900 sm:text-sm"
                         />
                       </div>
                       <div>
@@ -570,7 +634,7 @@ export function Admin() {
                           step="0.01"
                           value={editWelcomeBonus}
                           onChange={(e) => setEditWelcomeBonus(e.target.value)}
-                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-900 focus:border-blue-900 sm:text-sm"
                         />
                         <p className="mt-1 text-xs text-gray-500">
                           This value acts as the base balance. The user's total balance is this value + ad earnings - withdrawals.
@@ -585,14 +649,14 @@ export function Admin() {
                   type="button"
                   onClick={handleSaveUser}
                   disabled={editLoading}
-                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-70"
+                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-900 text-base font-medium text-white hover:bg-blue-950 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-900 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-70"
                 >
                   {editLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Changes'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setEditingUser(null)}
-                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-900 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                 >
                   Cancel
                 </button>

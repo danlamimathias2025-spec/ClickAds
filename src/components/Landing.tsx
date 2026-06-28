@@ -11,12 +11,12 @@ export function Landing() {
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           <div className="flex items-center">
-            <MousePointerClick className="h-8 w-8 text-indigo-600" />
+            <MousePointerClick className="h-8 w-8 text-blue-900" />
             <span className="ml-2 text-2xl font-bold text-gray-900">ClickAds</span>
           </div>
           <button
             onClick={() => navigate('/auth')}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-900 hover:bg-blue-950 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-900"
           >
             Login / Register
           </button>
@@ -29,7 +29,7 @@ export function Landing() {
           <div className="text-center max-w-3xl mx-auto mb-16">
             <h1 className="text-4xl tracking-tight font-extrabold text-gray-900 sm:text-5xl md:text-6xl mb-6">
               <span className="block">ClickAds: Turn Your</span>
-              <span className="block text-indigo-600">Clicks into Cash</span>
+              <span className="block text-blue-900">Clicks into Cash</span>
             </h1>
             <p className="mt-3 text-base text-gray-500 sm:mt-5 sm:text-lg sm:max-w-xl sm:mx-auto md:mt-5 md:text-xl">
               Looking for a simple way to boost your daily income without spending a kobo? Meet ClickAds, the ultimate rewards platform designed for the world market. No hidden fees, no "activation deposits," and no stress—just straightforward earning.
@@ -38,7 +38,7 @@ export function Landing() {
               <div className="rounded-md shadow">
                 <button
                   onClick={() => navigate('/auth')}
-                  className="w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 md:py-4 md:text-lg md:px-10"
+                  className="w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-900 hover:bg-blue-950 md:py-4 md:text-lg md:px-10"
                 >
                   Get Started Now
                   <ArrowRight className="ml-2 h-5 w-5" />
@@ -93,9 +93,9 @@ export function Landing() {
           </div>
 
           {/* Withdrawal Made Easy */}
-          <div className="mb-20 bg-indigo-50 rounded-2xl p-8 md:p-12">
+          <div className="mb-20 bg-purple-50 rounded-2xl p-8 md:p-12 border border-purple-100">
             <div className="text-center mb-10">
-              <Wallet className="h-12 w-12 text-indigo-600 mx-auto mb-4" />
+              <Wallet className="h-12 w-12 text-purple-600 mx-auto mb-4" />
               <h2 className="text-3xl font-extrabold text-gray-900">Withdrawal Made Easy</h2>
               <p className="mt-4 max-w-2xl text-xl text-gray-600 mx-auto">
                 We believe you should have access to your hard-earned money without the hassle.
@@ -104,7 +104,7 @@ export function Landing() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
               <div className="bg-white p-6 rounded-xl shadow-sm">
                 <h4 className="font-bold text-gray-900 mb-2">Minimum Withdrawal</h4>
-                <p className="text-indigo-600 font-semibold text-lg">₦5,000</p>
+                <p className="text-blue-900 font-semibold text-lg">₦300,000</p>
               </div>
               <div className="bg-white p-6 rounded-xl shadow-sm">
                 <h4 className="font-bold text-gray-900 mb-2">Direct Payouts</h4>
@@ -121,31 +121,31 @@ export function Landing() {
           <div className="mb-16">
             <h2 className="text-3xl font-extrabold text-gray-900 text-center mb-10">Getting Started is Simple</h2>
             <div className="max-w-3xl mx-auto">
-              <ol className="relative border-l border-indigo-200 ml-3 md:ml-0">
+              <ol className="relative border-l border-purple-200 ml-3 md:ml-0">
                 <li className="mb-10 ml-6">
-                  <span className="absolute flex items-center justify-center w-8 h-8 bg-indigo-100 rounded-full -left-4 ring-4 ring-white">
-                    <span className="text-indigo-600 font-bold">1</span>
+                  <span className="absolute flex items-center justify-center w-8 h-8 bg-purple-100 rounded-full -left-4 ring-4 ring-white">
+                    <span className="text-purple-600 font-bold">1</span>
                   </span>
                   <h3 className="font-bold text-lg text-gray-900 mb-1">Download & Register</h3>
                   <p className="text-gray-600">Create your free account in minutes.</p>
                 </li>
                 <li className="mb-10 ml-6">
-                  <span className="absolute flex items-center justify-center w-8 h-8 bg-indigo-100 rounded-full -left-4 ring-4 ring-white">
-                    <span className="text-indigo-600 font-bold">2</span>
+                  <span className="absolute flex items-center justify-center w-8 h-8 bg-purple-100 rounded-full -left-4 ring-4 ring-white">
+                    <span className="text-purple-600 font-bold">2</span>
                   </span>
                   <h3 className="font-bold text-lg text-gray-900 mb-1">Click Ads</h3>
                   <p className="text-gray-600">Browse our list of daily ad links and engage.</p>
                 </li>
                 <li className="mb-10 ml-6">
-                  <span className="absolute flex items-center justify-center w-8 h-8 bg-indigo-100 rounded-full -left-4 ring-4 ring-white">
-                    <span className="text-indigo-600 font-bold">3</span>
+                  <span className="absolute flex items-center justify-center w-8 h-8 bg-purple-100 rounded-full -left-4 ring-4 ring-white">
+                    <span className="text-purple-600 font-bold">3</span>
                   </span>
                   <h3 className="font-bold text-lg text-gray-900 mb-1">Reach the Goal</h3>
-                  <p className="text-gray-600">Accumulate up to ₦5,000 in your wallet.</p>
+                  <p className="text-gray-600">Accumulate up to ₦300,000 in your wallet.</p>
                 </li>
                 <li className="ml-6">
-                  <span className="absolute flex items-center justify-center w-8 h-8 bg-indigo-100 rounded-full -left-4 ring-4 ring-white">
-                    <span className="text-indigo-600 font-bold">4</span>
+                  <span className="absolute flex items-center justify-center w-8 h-8 bg-purple-100 rounded-full -left-4 ring-4 ring-white">
+                    <span className="text-purple-600 font-bold">4</span>
                   </span>
                   <h3 className="font-bold text-lg text-gray-900 mb-1">Cash Out</h3>
                   <p className="text-gray-600">Hit the withdraw button and enjoy your earnings!</p>
@@ -155,12 +155,12 @@ export function Landing() {
           </div>
 
           {/* CTA */}
-          <div className="bg-indigo-600 rounded-2xl p-8 md:p-12 text-center text-white">
+          <div className="bg-blue-900 rounded-2xl p-8 md:p-12 text-center text-white">
             <h2 className="text-3xl font-extrabold mb-4">Stop scrolling for free and start getting paid for it.</h2>
-            <p className="text-xl text-indigo-100 mb-8">Join ClickAds today and make every click count!</p>
+            <p className="text-xl text-blue-100 mb-8">Join ClickAds today and make every click count!</p>
             <button
               onClick={() => navigate('/auth')}
-              className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-md text-indigo-600 bg-white hover:bg-gray-50 shadow-lg transition-colors"
+              className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-md text-blue-900 bg-white hover:bg-gray-50 shadow-lg transition-colors"
             >
               Create Free Account
               <ArrowRight className="ml-2 h-5 w-5" />

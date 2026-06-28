@@ -17,6 +17,15 @@
         "createdAt": {
           "type": "timestamp",
           "description": "When the user registered."
+        },
+        "welcomeBonus": {
+          "type": "number"
+        },
+        "totalEarnings": {
+          "type": "number"
+        },
+        "balance": {
+          "type": "number"
         }
       },
       "required": ["username", "email", "createdAt"]
@@ -47,43 +56,102 @@
     },
     "Click": {
       "title": "Click",
-      "description": "A record of a user clicking an ad to prevent double-claiming.",
+      "description": "A record of a user clicking an ad.",
       "type": "object",
       "properties": {
         "adId": {
-          "type": "string",
-          "description": "The ID of the ad clicked."
+          "type": "string"
         },
         "rewardAmount": {
-          "type": "number",
-          "description": "The amount rewarded for this click."
+          "type": "number"
         },
         "clickedAt": {
-          "type": "timestamp",
-          "description": "When the click occurred."
+          "type": "timestamp"
+        },
+        "cycle": {
+          "type": "number"
         }
       },
       "required": ["adId", "rewardAmount", "clickedAt"]
+    },
+    "Withdrawal": {
+      "title": "Withdrawal",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "username": { "type": "string" },
+        "amount": { "type": "number" },
+        "bankName": { "type": "string" },
+        "accountNumber": { "type": "string" },
+        "accountName": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "timestamp" }
+      },
+      "required": ["userId", "username", "amount", "bankName", "accountNumber", "accountName", "status", "createdAt"]
+    },
+    "CheckIn": {
+      "title": "CheckIn",
+      "type": "object",
+      "properties": {
+        "rewardAmount": { "type": "number" },
+        "checkedAt": { "type": "timestamp" },
+        "date": { "type": "string" }
+      },
+      "required": ["rewardAmount", "checkedAt", "date"]
+    },
+    "Achievement": {
+      "title": "Achievement",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string" },
+        "title": { "type": "string" },
+        "rewardAmount": { "type": "number" },
+        "awardedAt": { "type": "timestamp" }
+      },
+      "required": ["type", "title", "rewardAmount", "awardedAt"]
+    },
+    "Activity": {
+      "title": "Activity",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "username": { "type": "string" },
+        "type": { "type": "string", "enum": ["withdrawal", "achievement", "click", "checkin"] },
+        "amount": { "type": "number" },
+        "title": { "type": "string" },
+        "createdAt": { "type": "timestamp" }
+      },
+      "required": ["userId", "username", "type", "createdAt"]
     }
   },
   "firestore": {
     "/users/{userId}": {
-      "schema": {
-        "$ref": "#/entities/User"
-      },
+      "schema": { "$ref": "#/entities/User" },
       "description": "Stores user profiles and balances."
     },
     "/ads/{adId}": {
-      "schema": {
-        "$ref": "#/entities/Ad"
-      },
+      "schema": { "$ref": "#/entities/Ad" },
       "description": "Stores available ads."
     },
-    "/users/{userId}/clicks/{adId}": {
-      "schema": {
-        "$ref": "#/entities/Click"
-      },
+    "/users/{userId}/clicks/{clickId}": {
+      "schema": { "$ref": "#/entities/Click" },
       "description": "Stores records of ads clicked by the user."
+    },
+    "/users/{userId}/checkins/{checkinId}": {
+      "schema": { "$ref": "#/entities/CheckIn" },
+      "description": "Stores daily check-in records."
+    },
+    "/users/{userId}/achievements/{achievementId}": {
+      "schema": { "$ref": "#/entities/Achievement" },
+      "description": "Stores user achievements."
+    },
+    "/withdrawals/{withdrawalId}": {
+      "schema": { "$ref": "#/entities/Withdrawal" },
+      "description": "Stores withdrawal requests."
+    },
+    "/activities/{activityId}": {
+      "schema": { "$ref": "#/entities/Activity" },
+      "description": "Stores global platform activities."
     }
   }
 }
