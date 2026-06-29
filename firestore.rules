@@ -52,7 +52,16 @@ service cloud.firestore {
     // Withdrawal Rules
     match /withdrawals/{withdrawalId} {
       allow read: if isAuthenticated() && (request.auth.uid == resource.data.userId);
+      allow create: if isAuthenticated() && 
+                    (request.auth.uid == request.resource.data.userId) &&
+                    get(/databases/$(database)/documents/users/$(request.auth.uid)).data.activationStatus == 'approved';
+    }
+
+    // Activation Rules
+    match /activations/{activationId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin());
       allow create: if isAuthenticated() && (request.auth.uid == request.resource.data.userId);
+      allow update: if isAdmin();
     }
 
     // Global Activity Rules

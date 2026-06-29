@@ -14,6 +14,8 @@ import { Landing } from './components/Landing';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Loader2 } from 'lucide-react';
 
+import { Toaster } from 'sonner';
+
 export default function App() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -38,6 +40,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
+      <Toaster position="top-center" richColors />
       <BrowserRouter>
         <Routes>
           <Route 

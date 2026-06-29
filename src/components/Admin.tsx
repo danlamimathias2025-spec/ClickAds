@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, addDoc, serverTimestamp, onSnapshot, deleteDoc, doc, updateDoc, query, getDocs, writeBatch } from 'firebase/firestore';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
-import { Plus, Trash2, Loader2, ShieldAlert, ArrowLeft, CheckCircle, XCircle, Users, Edit2, Save, X, Mail, RefreshCcw } from 'lucide-react';
+import { Plus, Trash2, Loader2, ShieldAlert, ArrowLeft, CheckCircle, XCircle, Users, Edit2, Save, X, Mail, RefreshCcw, Image as ImageIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface Ad {
@@ -29,6 +29,16 @@ interface User {
   username: string;
   email: string;
   welcomeBonus: number;
+  activationStatus?: string;
+  createdAt: any;
+}
+
+interface Activation {
+  id: string;
+  userId: string;
+  username: string;
+  receiptImage: string;
+  status: string;
   createdAt: any;
 }
 
@@ -36,12 +46,13 @@ export function Admin() {
   const [ads, setAds] = useState<Ad[]>([]);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [activations, setActivations] = useState<Activation[]>([]);
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
   const [rewardAmount, setRewardAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState<'ads' | 'withdrawals' | 'users'>('ads');
+  const [activeTab, setActiveTab] = useState<'ads' | 'withdrawals' | 'users' | 'activations'>('ads');
   
   // Edit User State
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -135,10 +146,24 @@ export function Admin() {
       (error) => handleFirestoreError(error, OperationType.LIST, 'users')
     );
 
+    const unsubscribeActivations = onSnapshot(
+      collection(db, 'activations'),
+      (snapshot) => {
+        const aData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Activation[];
+        aData.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+        setActivations(aData);
+      },
+      (error) => handleFirestoreError(error, OperationType.LIST, 'activations')
+    );
+
     return () => {
       unsubscribeAds();
       unsubscribeWithdrawals();
       unsubscribeUsers();
+      unsubscribeActivations();
     };
   }, []);
 
@@ -179,6 +204,19 @@ export function Admin() {
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `withdrawals/${id}`);
     }
+  };
+
+  const handleUpdateActivationStatus = async (activationId: string, userId: string, status: 'approved' | 'rejected') => {
+    if (!window.confirm(`Are you sure you want to ${status} this activation request?`)) return;
+
+    try {
+      await updateDoc(doc(db, 'activations', activationId), { status });
+      await updateDoc(doc(db, 'users', userId), { activationStatus: status });
+      setActionMessage({ type: 'success', text: `Activation request ${status} successfully.` });
+    } catch (err: any) {
+      setActionMessage({ type: 'error', text: err.message || 'Failed to update activation status' });
+    }
+    setTimeout(() => setActionMessage(null), 3000);
   };
 
   const handleDeleteUser = async (id: string) => {
@@ -233,38 +271,69 @@ export function Admin() {
   };
 
   const handleResetApp = async () => {
-    if (!window.confirm('CRITICAL ACTION: This will delete ALL users (except admin), ALL clicks, ALL withdrawals, and ALL check-ins. Are you absolutely sure?')) return;
+    if (!window.confirm('CRITICAL ACTION: This will delete ALL platform data (Users, Withdrawals, Activities, etc.). Ads will be preserved. Are you absolutely sure?')) return;
     
     setResetAppLoading(true);
     try {
-      const batch = writeBatch(db);
-      
+      // Helper function to delete collection in chunks to stay under 500 limit
+      const deleteCollection = async (collectionPath: string) => {
+        const snap = await getDocs(collection(db, collectionPath));
+        let batch = writeBatch(db);
+        let count = 0;
+        
+        for (const d of snap.docs) {
+          batch.delete(d.ref);
+          count++;
+          if (count === 450) {
+            await batch.commit();
+            batch = writeBatch(db);
+            count = 0;
+          }
+        }
+        if (count > 0) await batch.commit();
+      };
+
       // 1. Delete all withdrawals
-      const withdrawalsSnap = await getDocs(collection(db, 'withdrawals'));
-      withdrawalsSnap.docs.forEach(d => batch.delete(d.ref));
+      await deleteCollection('withdrawals');
       
-      // 2. Delete all users except admin and their subcollections
+      // 2. Delete all activities
+      await deleteCollection('activities');
+      
+      // 3. Delete users and their subcollections
       const usersSnap = await getDocs(collection(db, 'users'));
       for (const userDoc of usersSnap.docs) {
-        if (userDoc.data().email === 'danlamimathias2025@gmail.com') continue;
+        // Skip the main admin
+        if (userDoc.data().email === 'danlamimathias2025@gmail.com') {
+          // But clear admin's subcollections if they exist
+          await deleteCollection(`users/${userDoc.id}/clicks`);
+          await deleteCollection(`users/${userDoc.id}/checkins`);
+          await deleteCollection(`users/${userDoc.id}/achievements`);
+          
+          // Reset admin balance to default
+          await updateDoc(userDoc.ref, {
+            balance: 80000,
+            totalEarnings: 80000,
+            welcomeBonus: 80000
+          });
+          continue;
+        }
         
-        const clicksSnap = await getDocs(collection(db, `users/${userDoc.id}/clicks`));
-        clicksSnap.docs.forEach(d => batch.delete(d.ref));
+        // Delete user's subcollections
+        await deleteCollection(`users/${userDoc.id}/clicks`);
+        await deleteCollection(`users/${userDoc.id}/checkins`);
+        await deleteCollection(`users/${userDoc.id}/achievements`);
         
-        const checkinsSnap = await getDocs(collection(db, `users/${userDoc.id}/checkins`));
-        checkinsSnap.docs.forEach(d => batch.delete(d.ref));
-        
-        batch.delete(userDoc.ref);
+        // Delete user document
+        await deleteDoc(userDoc.ref);
       }
       
-      await batch.commit();
-      setActionMessage({ type: 'success', text: 'Application reset successfully.' });
+      setActionMessage({ type: 'success', text: 'Application data has been fully reset.' });
     } catch (err: any) {
-      console.error(err);
+      console.error('Reset error:', err);
       setActionMessage({ type: 'error', text: err.message || 'Failed to reset application' });
     } finally {
       setResetAppLoading(false);
-      setTimeout(() => setActionMessage(null), 3000);
+      setTimeout(() => setActionMessage(null), 5000);
     }
   };
 
@@ -324,6 +393,20 @@ export function Admin() {
         >
           <Users className="h-4 w-4 mr-2" />
           Manage Users
+        </button>
+        <button
+          onClick={() => setActiveTab('activations')}
+          className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+            activeTab === 'activations' ? 'bg-blue-900 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <ShieldAlert className="h-4 w-4 mr-2" />
+          Activations
+          {activations.filter(a => a.status === 'pending').length > 0 && (
+            <span className="ml-2 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+              {activations.filter(a => a.status === 'pending').length}
+            </span>
+          )}
         </button>
       </div>
 
@@ -586,6 +669,92 @@ export function Admin() {
                         >
                           <Trash2 className="h-5 w-5 inline" />
                         </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'activations' && (
+        <div className="bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+            <h3 className="text-lg font-medium text-gray-900">Activation Requests</h3>
+            <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">
+              {activations.filter(a => a.status === 'pending').length} Pending Requests
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Receipt</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {activations.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center text-sm text-gray-500">
+                      <div className="flex flex-col items-center">
+                        <CheckCircle className="h-10 w-10 text-gray-200 mb-3" />
+                        <p>No activation requests found.</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  activations.map(act => (
+                    <tr key={act.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">{act.username}</div>
+                        <div className="text-xs text-gray-500">ID: {act.userId}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <button 
+                          onClick={() => window.open(act.receiptImage, '_blank')}
+                          className="flex items-center text-blue-900 hover:text-blue-700 text-xs font-bold uppercase tracking-tight"
+                        >
+                          <ImageIcon className="h-4 w-4 mr-1.5" />
+                          View Image
+                        </button>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500">
+                        {act.createdAt?.toDate?.() ? act.createdAt.toDate().toLocaleString() : 'Just now'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
+                          act.status === 'approved' ? 'bg-green-100 text-green-800' :
+                          act.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                          'bg-amber-100 text-amber-800'
+                        }`}>
+                          {act.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        {act.status === 'pending' && (
+                          <div className="flex justify-end space-x-3">
+                            <button
+                              onClick={() => handleUpdateActivationStatus(act.id, act.userId, 'approved')}
+                              className="text-green-600 hover:text-green-900 flex items-center"
+                              title="Approve"
+                            >
+                              <CheckCircle className="h-5 w-5" />
+                            </button>
+                            <button
+                              onClick={() => handleUpdateActivationStatus(act.id, act.userId, 'rejected')}
+                              className="text-red-600 hover:text-red-900 flex items-center"
+                              title="Reject"
+                            >
+                              <XCircle className="h-5 w-5" />
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))

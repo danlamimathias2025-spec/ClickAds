@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, doc, setDoc, addDoc, serverTimestamp, getDoc, query, where, increment, orderBy, limit } from 'firebase/firestore';
 import { signOut, updateEmail, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
-import { LogOut, ExternalLink, MousePointerClick, Loader2, ShieldAlert, Clock, Info, Wallet, X, Home, User, Banknote, CheckCircle, Trophy, HelpCircle, ChevronDown, ChevronUp, Settings, Mail, Lock, Calendar, Edit2, Save, AlertCircle, BarChart3, ArrowRightLeft, CreditCard, ChevronRight } from 'lucide-react';
+import { toast } from 'sonner';
+import { LogOut, ExternalLink, MousePointerClick, Loader2, ShieldAlert, Clock, Info, Wallet, X, Home, User, Banknote, CheckCircle, Trophy, HelpCircle, ChevronDown, ChevronUp, Settings, Mail, Lock, Calendar, Edit2, Save, AlertCircle, BarChart3, ArrowRightLeft, CreditCard, ChevronRight, Upload, Image as ImageIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
@@ -110,6 +111,7 @@ export function Dashboard() {
   const [username, setUsername] = useState<string>('');
   const [welcomeBonus, setWelcomeBonus] = useState<number>(0);
   const [userBalance, setUserBalance] = useState<number | null>(null);
+  const [activationStatus, setActivationStatus] = useState<'none' | 'pending' | 'approved' | 'rejected'>('none');
   const [userCreatedAt, setUserCreatedAt] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [verifyingAdId, setVerifyingAdId] = useState<string | null>(null);
@@ -126,6 +128,10 @@ export function Dashboard() {
   const [activeTab, setActiveTab] = useState<'home' | 'wallet' | 'leaderboard' | 'profile'>('home');
   const [checkInLoading, setCheckInLoading] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
+  
+  // Activation State
+  const [activationLoading, setActivationLoading] = useState(false);
+  const [activationReceipt, setActivationReceipt] = useState<string | null>(null);
   
   // Profile State
   const [newUsername, setNewUsername] = useState('');
@@ -242,6 +248,7 @@ export function Dashboard() {
         setUsername(data.username);
         setWelcomeBonus(data.welcomeBonus || 0);
         setUserBalance(data.balance !== undefined ? data.balance : null);
+        setActivationStatus(data.activationStatus || 'none');
         setUserCreatedAt(data.createdAt);
 
         // Check if welcome modal should be shown
@@ -260,6 +267,7 @@ export function Dashboard() {
               welcomeBonus: 80000,
               totalEarnings: 80000,
               balance: 80000,
+              activationStatus: 'none',
               createdAt: serverTimestamp()
             });
           }
@@ -425,6 +433,7 @@ export function Dashboard() {
 
         setShowAchievementBadge({ id: docRef.id, ...achievementData });
         triggerConfetti();
+        toast.success(`Achievement Earned: ${title}! Reward: ₦${reward.toLocaleString()}`);
 
         // Log global activity
         await addDoc(collection(db, 'activities'), {
@@ -476,6 +485,8 @@ export function Dashboard() {
               totalEarnings: increment(ad.rewardAmount),
               balance: increment(ad.rewardAmount)
             }, { merge: true });
+
+            toast.success(`Earned ₦${ad.rewardAmount.toLocaleString()} from ${ad.title}!`);
 
             // Trigger confetti if daily limit reached
             if (clicksToday + 1 === DAILY_LIMIT) {
@@ -657,6 +668,11 @@ export function Dashboard() {
   const handleWithdraw = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userId) return;
+
+    if (activationStatus !== 'approved') {
+      setWithdrawError('Your account must be activated before you can withdraw. Please complete the activation process below.');
+      return;
+    }
     
     if (!canWithdraw) {
       setWithdrawError('Withdrawals are only available on the first Friday of every month between 8:00 AM and 10:00 AM UTC.');
@@ -703,6 +719,7 @@ export function Dashboard() {
         balance: increment(-amount)
       }, { merge: true });
 
+      toast.success(`Withdrawal request for ₦${amount.toLocaleString()} submitted!`);
       setWithdrawAmount('');
       setBankName('');
       setAccountNumber('');
@@ -738,6 +755,8 @@ export function Dashboard() {
         balance: increment(500)
       }, { merge: true });
 
+      toast.success('Daily check-in reward: ₦500 added to balance!');
+
       // Log global activity
       await addDoc(collection(db, 'activities'), {
         userId,
@@ -758,6 +777,50 @@ export function Dashboard() {
 
   const todayStr = new Date().toISOString().split('T')[0];
   const hasCheckedInToday = checkins.some(c => c.date === todayStr);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 800 * 1024) { // Slightly less than 1MB to be safe for Firestore string limit
+        toast.error('Image is too large. Please upload an image smaller than 800KB.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setActivationReceipt(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleActivationSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userId || !activationReceipt) return;
+
+    setActivationLoading(true);
+    try {
+      await addDoc(collection(db, 'activations'), {
+        userId,
+        username,
+        receiptImage: activationReceipt,
+        status: 'pending',
+        createdAt: serverTimestamp()
+      });
+
+      await setDoc(doc(db, 'users', userId), {
+        activationStatus: 'pending'
+      }, { merge: true });
+
+      toast.success('Activation receipt submitted! Please wait for admin approval.');
+      setActivationReceipt(null);
+    } catch (err: any) {
+      handleFirestoreError(err, OperationType.CREATE, 'activations');
+    } finally {
+      setActivationLoading(false);
+    }
+  };
+
+  const isEligibleForActivation = (userBalance || 0) >= 300000;
 
   if (loading) {
     return (
@@ -1249,83 +1312,168 @@ export function Dashboard() {
                   )}
                 </div>
                 <div className="p-6">
-                  {!canWithdraw && (
-                    <div className="mb-6 bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start">
-                      <Info className="h-4 w-4 text-amber-600 mt-0.5 mr-3 flex-shrink-0" />
-                      <p className="text-amber-800 text-[11px] font-bold leading-relaxed uppercase tracking-tight">
-                        Payouts open first Fridays (8:00 AM - 10:00 AM UTC). Min ₦300k required.
-                      </p>
-                    </div>
-                  )}
-                  
-                  <form onSubmit={handleWithdraw} className="space-y-4">
-                    {withdrawError && (
-                      <div className="text-[11px] font-black text-red-600 bg-red-50 p-4 rounded-xl border border-red-100 uppercase tracking-tight">{withdrawError}</div>
-                    )}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Select Bank</label>
-                        <select
-                          required
-                          value={bankName}
-                          onChange={(e) => setBankName(e.target.value)}
-                          disabled={!canWithdraw || withdrawLoading}
-                          className="block w-full border border-gray-200 rounded-xl py-2.5 px-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-900 transition-all bg-white disabled:bg-gray-50 disabled:text-gray-400 shadow-sm"
+                  {isEligibleForActivation && activationStatus !== 'approved' ? (
+                    <div className="space-y-6">
+                      <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5">
+                        <div className="flex items-start">
+                          <ShieldAlert className="h-5 w-5 text-blue-900 mt-0.5 mr-3 flex-shrink-0" />
+                          <div>
+                            <h4 className="text-[11px] font-black text-blue-900 uppercase tracking-widest mb-1">Account Activation Required</h4>
+                            <p className="text-blue-800 text-[10px] font-bold leading-relaxed uppercase tracking-tight">
+                              You are eligible for withdrawal! To activate your account and process your payout, please pay the one-time activation fee.
+                            </p>
+                          </div>
+                        </div>
+                        <a 
+                          href="https://paystack.shop/pay/ads-click" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="mt-4 flex items-center justify-between bg-blue-900 text-white p-4 rounded-xl hover:bg-blue-950 transition-all group"
                         >
-                          <option value="" disabled>Select Bank</option>
-                          {NIGERIAN_BANKS.map(bank => (
-                            <option key={bank} value={bank}>{bank}</option>
-                          ))}
-                        </select>
+                          <span className="text-[10px] font-black uppercase tracking-widest">Pay Activation Fee</span>
+                          <ExternalLink className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                        </a>
                       </div>
-                      <div>
-                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Account No.</label>
-                        <input
-                          type="text"
-                          required
-                          value={accountNumber}
-                          onChange={(e) => setAccountNumber(e.target.value)}
-                          disabled={!canWithdraw || withdrawLoading}
-                          className="block w-full border border-gray-200 rounded-xl py-2.5 px-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-900 transition-all disabled:bg-gray-50 disabled:text-gray-400 shadow-sm"
-                          placeholder="0123456789"
-                        />
-                      </div>
+
+                      {activationStatus === 'pending' ? (
+                        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-center">
+                          <Clock className="h-8 w-8 text-amber-600 mx-auto mb-3 animate-pulse" />
+                          <h4 className="text-[11px] font-black text-amber-900 uppercase tracking-widest">Activation Pending</h4>
+                          <p className="text-amber-800 text-[10px] font-bold uppercase tracking-tight mt-1">
+                            Your receipt has been submitted and is currently being reviewed by our team.
+                          </p>
+                        </div>
+                      ) : (
+                        <form onSubmit={handleActivationSubmit} className="space-y-4">
+                          {activationStatus === 'rejected' && (
+                            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start">
+                              <X className="h-4 w-4 text-red-600 mr-2 flex-shrink-0" />
+                              <p className="text-red-700 text-[10px] font-black uppercase tracking-tight">Your previous activation request was rejected. Please upload a valid receipt.</p>
+                            </div>
+                          )}
+                          <div className="space-y-2">
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Upload Payment Receipt</label>
+                            <div className="relative">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={handleFileChange}
+                                required
+                                className="hidden"
+                                id="receipt-upload"
+                              />
+                              <label
+                                htmlFor="receipt-upload"
+                                className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-200 rounded-2xl hover:border-blue-300 hover:bg-blue-50 transition-all cursor-pointer overflow-hidden"
+                              >
+                                {activationReceipt ? (
+                                  <div className="relative w-full h-full">
+                                    <img src={activationReceipt} alt="Receipt" className="w-full h-full object-cover" />
+                                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                                      <p className="text-white text-[10px] font-black uppercase tracking-widest">Change Image</p>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <Upload className="h-6 w-6 text-gray-400 mb-2" />
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Click to upload image</p>
+                                    <p className="text-[8px] font-bold text-gray-300 uppercase tracking-tight mt-1">MAX SIZE 800KB</p>
+                                  </>
+                                )}
+                              </label>
+                            </div>
+                          </div>
+                          <button
+                            type="submit"
+                            disabled={!activationReceipt || activationLoading}
+                            className="w-full py-4 rounded-xl bg-blue-900 text-white text-[10px] font-black uppercase tracking-widest hover:bg-blue-950 transition-all disabled:opacity-50 shadow-lg shadow-blue-900/20"
+                          >
+                            {activationLoading ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Submit Activation Receipt'}
+                          </button>
+                        </form>
+                      )}
                     </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Account Name</label>
-                      <input
-                        type="text"
-                        required
-                        value={accountName}
-                        onChange={(e) => setAccountName(e.target.value)}
-                        disabled={!canWithdraw || withdrawLoading}
-                        className="block w-full border border-gray-200 rounded-xl py-2.5 px-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-900 transition-all disabled:bg-gray-50 disabled:text-gray-400 shadow-sm"
-                        placeholder="Holder's Name"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Amount (₦)</label>
-                      <input
-                        type="number"
-                        required
-                        min="300000"
-                        max={balance}
-                        step="0.01"
-                        value={withdrawAmount}
-                        onChange={(e) => setWithdrawAmount(e.target.value)}
-                        disabled={!canWithdraw || withdrawLoading}
-                        className="block w-full border border-gray-200 rounded-xl py-2.5 px-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-900 transition-all disabled:bg-gray-50 disabled:text-gray-400 shadow-sm"
-                        placeholder="Min ₦300,000"
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={!canWithdraw || withdrawLoading || balance < 300000}
-                      className="w-full flex justify-center py-4 px-4 rounded-xl text-xs font-black uppercase tracking-widest text-white bg-blue-900 hover:bg-blue-950 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-900/20"
-                    >
-                      {withdrawLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm Withdrawal Request'}
-                    </button>
-                  </form>
+                  ) : (
+                    <>
+                      {!canWithdraw && (
+                        <div className="mb-6 bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start">
+                          <Info className="h-4 w-4 text-amber-600 mt-0.5 mr-3 flex-shrink-0" />
+                          <p className="text-amber-800 text-[11px] font-bold leading-relaxed uppercase tracking-tight">
+                            Payouts open first Fridays (8:00 AM - 10:00 AM UTC). Min ₦300k required.
+                          </p>
+                        </div>
+                      )}
+                      
+                      <form onSubmit={handleWithdraw} className="space-y-4">
+                        {withdrawError && (
+                          <div className="text-[11px] font-black text-red-600 bg-red-50 p-4 rounded-xl border border-red-100 uppercase tracking-tight">{withdrawError}</div>
+                        )}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Select Bank</label>
+                            <select
+                              required
+                              value={bankName}
+                              onChange={(e) => setBankName(e.target.value)}
+                              disabled={!canWithdraw || withdrawLoading}
+                              className="block w-full border border-gray-200 rounded-xl py-2.5 px-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-900 transition-all bg-white disabled:bg-gray-50 disabled:text-gray-400 shadow-sm"
+                            >
+                              <option value="" disabled>Select Bank</option>
+                              {NIGERIAN_BANKS.map(bank => (
+                                <option key={bank} value={bank}>{bank}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Account No.</label>
+                            <input
+                              type="text"
+                              required
+                              value={accountNumber}
+                              onChange={(e) => setAccountNumber(e.target.value)}
+                              disabled={!canWithdraw || withdrawLoading}
+                              className="block w-full border border-gray-200 rounded-xl py-2.5 px-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-900 transition-all disabled:bg-gray-50 disabled:text-gray-400 shadow-sm"
+                              placeholder="0123456789"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Account Name</label>
+                          <input
+                            type="text"
+                            required
+                            value={accountName}
+                            onChange={(e) => setAccountName(e.target.value)}
+                            disabled={!canWithdraw || withdrawLoading}
+                            className="block w-full border border-gray-200 rounded-xl py-2.5 px-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-900 transition-all disabled:bg-gray-50 disabled:text-gray-400 shadow-sm"
+                            placeholder="Holder's Name"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Amount (₦)</label>
+                          <input
+                            type="number"
+                            required
+                            min="300000"
+                            max={balance}
+                            step="0.01"
+                            value={withdrawAmount}
+                            onChange={(e) => setWithdrawAmount(e.target.value)}
+                            disabled={!canWithdraw || withdrawLoading}
+                            className="block w-full border border-gray-200 rounded-xl py-2.5 px-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-900 transition-all disabled:bg-gray-50 disabled:text-gray-400 shadow-sm"
+                            placeholder="Min ₦300,000"
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={!canWithdraw || withdrawLoading || balance < 300000 || activationStatus !== 'approved'}
+                          className="w-full flex justify-center py-4 px-4 rounded-xl text-xs font-black uppercase tracking-widest text-white bg-blue-900 hover:bg-blue-950 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-900/20"
+                        >
+                          {withdrawLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm Withdrawal Request'}
+                        </button>
+                      </form>
+                    </>
+                  )}
                 </div>
               </div>
 

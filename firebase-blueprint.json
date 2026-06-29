@@ -26,9 +26,26 @@
         },
         "balance": {
           "type": "number"
+        },
+        "activationStatus": {
+          "type": "string",
+          "enum": ["none", "pending", "approved", "rejected"],
+          "default": "none"
         }
       },
       "required": ["username", "email", "createdAt"]
+    },
+    "Activation": {
+      "title": "Activation",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "username": { "type": "string" },
+        "receiptImage": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "timestamp" }
+      },
+      "required": ["userId", "username", "receiptImage", "status", "createdAt"]
     },
     "Ad": {
       "title": "Ad",
@@ -152,6 +169,10 @@
     "/activities/{activityId}": {
       "schema": { "$ref": "#/entities/Activity" },
       "description": "Stores global platform activities."
+    },
+    "/activations/{activationId}": {
+      "schema": { "$ref": "#/entities/Activation" },
+      "description": "Stores withdrawal activation requests."
     }
   }
 }
