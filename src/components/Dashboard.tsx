@@ -75,6 +75,7 @@ interface Achievement {
 
 interface Withdrawal {
   id: string;
+  referenceId?: string;
   amount: number;
   bankName: string;
   accountNumber: string;
@@ -694,6 +695,7 @@ export function Dashboard() {
     setWithdrawError('');
 
     try {
+      const referenceId = `CAD-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
       await addDoc(collection(db, 'withdrawals'), {
         userId,
         username: username || auth.currentUser?.email || 'Unknown',
@@ -702,6 +704,7 @@ export function Dashboard() {
         accountNumber,
         accountName,
         status: 'pending',
+        referenceId,
         createdAt: serverTimestamp()
       });
 
@@ -1479,38 +1482,35 @@ export function Dashboard() {
 
               <div className="space-y-4">
                 <div className="flex items-center justify-between ml-1">
-                  <h3 className="text-[11px] font-black text-gray-900 uppercase tracking-widest">Payout History</h3>
+                  <h3 className="text-[11px] font-black text-gray-900 uppercase tracking-widest">Withdrawal History Log</h3>
                   <div className="h-1.5 w-1.5 rounded-full bg-green-500 animate-ping" />
                 </div>
-                {withdrawals.length === 0 ? (
+                {withdrawals.filter(w => w.status === 'approved').length === 0 ? (
                   <div className="bg-white rounded-3xl border border-dashed border-gray-200 p-12 text-center h-[400px] flex flex-col items-center justify-center">
-                    <Banknote className="mx-auto h-12 w-12 text-gray-200 mb-4" />
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Transaction history empty</p>
+                    <CheckCircle className="mx-auto h-12 w-12 text-gray-200 mb-4" />
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">No successful payouts yet</p>
                   </div>
                 ) : (
                   <div className="bg-white rounded-3xl shadow-sm border border-gray-200 overflow-hidden h-[400px] flex flex-col">
                     <div className="divide-y divide-gray-100 overflow-y-auto">
-                      {withdrawals.map(w => (
-                        <div key={w.id} className="p-5 flex items-center justify-between hover:bg-gray-50 transition-colors">
-                          <div className="flex items-center">
-                            <div className={`h-10 w-10 rounded-xl flex items-center justify-center mr-4 ${
-                              w.status === 'approved' ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'
-                            }`}>
-                              <ArrowRightLeft className="h-5 w-5" />
+                      {withdrawals.filter(w => w.status === 'approved').map(w => (
+                        <div key={w.id} className="p-5 hover:bg-gray-50 transition-colors">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center">
+                              <div className="h-8 w-8 rounded-lg bg-green-50 text-green-600 flex items-center justify-center mr-3">
+                                <Banknote className="h-4 w-4" />
+                              </div>
+                              <div>
+                                <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">₦{w.amount.toLocaleString()}</p>
+                                <p className="text-[8px] font-bold text-gray-400 uppercase tracking-tight">{w.createdAt?.toDate ? new Date(w.createdAt.toDate()).toLocaleDateString() : 'N/A'}</p>
+                              </div>
                             </div>
-                            <div>
-                              <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">₦{w.amount.toLocaleString()}</p>
-                              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tight mt-0.5">{w.bankName}</p>
-                            </div>
+                            <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest">Success</span>
                           </div>
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest ${
-                            w.status === 'approved' ? 'bg-green-100 text-green-700' :
-                            w.status === 'processing' ? 'bg-blue-100 text-blue-700' :
-                            w.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                            'bg-amber-100 text-amber-700'
-                          }`}>
-                            {w.status}
-                          </span>
+                          <div className="flex items-center justify-between text-[8px] font-black uppercase tracking-widest text-gray-400">
+                            <span>Ref: {w.referenceId || `CAD-${w.id.substring(0, 8).toUpperCase()}`}</span>
+                            <span>{w.bankName}</span>
+                          </div>
                         </div>
                       ))}
                     </div>

@@ -49,7 +49,7 @@ export function Admin() {
   const [activations, setActivations] = useState<Activation[]>([]);
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
-  const [rewardAmount, setRewardAmount] = useState('');
+  const [rewardAmount, setRewardAmount] = useState('500');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<'ads' | 'withdrawals' | 'users' | 'activations'>('ads');
@@ -337,6 +337,60 @@ export function Admin() {
     }
   };
 
+  const [autoGenLoading, setAutoGenLoading] = useState(false);
+
+  const handleAutoGenerateAds = async () => {
+    if (!window.confirm('This will automatically generate 5 daily ads with ₦500 rewards. Continue?')) return;
+    
+    setAutoGenLoading(true);
+    try {
+      const defaultAds = [
+        { title: 'Watch Video & Earn', url: 'https://www.youtube.com' },
+        { title: 'Visit Website Task 1', url: 'https://google.com' },
+        { title: 'Special Promo Click', url: 'https://bing.com' },
+        { title: 'Premium Reward Ad', url: 'https://yahoo.com' },
+        { title: 'Quick Earning Link', url: 'https://duckduckgo.com' }
+      ];
+
+      for (const ad of defaultAds) {
+        await addDoc(collection(db, 'ads'), {
+          title: ad.title,
+          url: ad.url,
+          rewardAmount: 500,
+          createdAt: serverTimestamp()
+        });
+      }
+      setActionMessage({ type: 'success', text: '5 Ads successfully auto-generated!' });
+    } catch (err: any) {
+      setActionMessage({ type: 'error', text: err.message || 'Failed to generate ads' });
+    } finally {
+      setAutoGenLoading(false);
+      setTimeout(() => setActionMessage(null), 3000);
+    }
+  };
+
+  const [updatingAds, setUpdatingAds] = useState(false);
+
+  const handleUpdateAllAdsTo500 = async () => {
+    if (!window.confirm('This will update ALL existing ads to have a ₦500 reward. Continue?')) return;
+    
+    setUpdatingAds(true);
+    try {
+      const snap = await getDocs(collection(db, 'ads'));
+      let count = 0;
+      for (const d of snap.docs) {
+        await updateDoc(d.ref, { rewardAmount: 500 });
+        count++;
+      }
+      setActionMessage({ type: 'success', text: `Successfully updated ${count} ads to ₦500!` });
+    } catch (err: any) {
+      setActionMessage({ type: 'error', text: err.message || 'Failed to update ads' });
+    } finally {
+      setUpdatingAds(false);
+      setTimeout(() => setActionMessage(null), 3000);
+    }
+  };
+
   const pendingWithdrawals = withdrawals.filter(w => w.status === 'pending' || w.status === 'processing');
   const withdrawalHistory = withdrawals.filter(w => w.status !== 'pending' && w.status !== 'processing');
 
@@ -413,8 +467,28 @@ export function Admin() {
       {activeTab === 'ads' && (
         <>
           <div className="bg-white shadow-sm border border-gray-200 rounded-xl p-6 mb-8">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Add New Ad</h3>
-        <form onSubmit={handleAddAd} className="space-y-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium text-gray-900">Add New Ad</h3>
+              <div className="flex space-x-2">
+                <button
+                  onClick={handleUpdateAllAdsTo500}
+                  disabled={updatingAds}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-900 disabled:opacity-50 transition-all"
+                >
+                  {updatingAds ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCcw className="h-4 w-4 mr-2" />}
+                  Update All to ₦500
+                </button>
+                <button
+                  onClick={handleAutoGenerateAds}
+                  disabled={autoGenLoading}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 transition-all"
+                >
+                  {autoGenLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+                  Auto-Generate 5 Daily Ads (₦500)
+                </button>
+              </div>
+            </div>
+            <form onSubmit={handleAddAd} className="space-y-4">
           {error && (
             <div className="text-sm text-red-600 bg-red-50 p-3 rounded-md">{error}</div>
           )}
@@ -427,7 +501,7 @@ export function Admin() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-900 focus:border-blue-900 sm:text-sm"
-                placeholder="Click here to earn ₦50!"
+                placeholder="Click here to earn ₦500!"
               />
             </div>
             <div>
@@ -451,7 +525,7 @@ export function Admin() {
                 value={rewardAmount}
                 onChange={(e) => setRewardAmount(e.target.value)}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-900 focus:border-blue-900 sm:text-sm"
-                placeholder="50.00"
+                placeholder="500.00"
               />
             </div>
           </div>
