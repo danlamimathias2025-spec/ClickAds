@@ -118,6 +118,18 @@ export function Dashboard() {
   const [verifyingAdId, setVerifyingAdId] = useState<string | null>(null);
   const [successAdId, setSuccessAdId] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(0);
+  const [currentDay, setCurrentDay] = useState(new Date().toDateString());
+  
+  // Refresh daily state at midnight
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const today = new Date().toDateString();
+      if (today !== currentDay) {
+        setCurrentDay(today);
+      }
+    }, 60000); // Check every minute
+    return () => clearInterval(interval);
+  }, [currentDay]);
   
   // Withdrawal State
   const [withdrawAmount, setWithdrawAmount] = useState('');
@@ -235,6 +247,63 @@ export function Dashboard() {
       a: "No, ClickAds is free to use. We do not require any 'activation deposits' or hidden fees to withdraw your hard-earned money."
     }
   ];
+
+  // Simulation names and actions
+  const SIMULATED_NAMES = [
+    'Chukwudi O.', 'Olamide A.', 'Fatima B.', 'Emeka J.', 'Amina S.', 
+    'Tunde W.', 'Ngozi E.', 'Ibrahim K.', 'Chinonso M.', 'Oluchi P.',
+    'Babatunde R.', 'Zainab L.', 'Uche G.', 'Folake V.', 'Damilola T.',
+    'Ifeanyi Q.', 'Kelechi S.', 'Adeola N.', 'Yusuf M.', 'Blessing O.',
+    'Oluwaseun F.', 'Adebayo D.', 'Chisom K.', 'Temitope L.', 'Nneka J.',
+    'Abubakar H.', 'Ogechi V.', 'Mustapha G.', 'Joy A.', 'Ebuka P.'
+  ];
+
+  const SIMULATED_ACTIONS = [
+    { type: 'withdrawal', text: 'just requested a withdrawal of', min: 300000, max: 850000 },
+    { type: 'click', text: 'just completed an ad task earning', min: 500, max: 500 },
+    { type: 'checkin', text: 'just claimed their daily check-in bonus of', min: 500, max: 500 },
+    { type: 'achievement', text: 'just unlocked the 50 Ads Clicked Badge!', amount: 1000 },
+    { type: 'achievement', text: 'just earned the First 100k Badge!', amount: 1000 }
+  ];
+
+  const [simulatedActivities, setSimulatedActivities] = useState<any[]>([]);
+
+  useEffect(() => {
+    const generateActivity = () => {
+      const name = SIMULATED_NAMES[Math.floor(Math.random() * SIMULATED_NAMES.length)];
+      const action = SIMULATED_ACTIONS[Math.floor(Math.random() * SIMULATED_ACTIONS.length)];
+      
+      let amount = action.amount;
+      if (action.min && action.max) {
+        amount = Math.floor(Math.random() * (action.max - action.min + 1)) + action.min;
+      }
+
+      const newActivity = {
+        id: `sim-${Date.now()}`,
+        username: name,
+        type: action.type,
+        text: action.text,
+        amount: amount,
+        createdAt: new Date(),
+        isSimulated: true
+      };
+
+      setSimulatedActivities(prev => [newActivity, ...prev].slice(0, 5));
+      
+      // Auto-remove after 8 seconds
+      setTimeout(() => {
+        setSimulatedActivities(prev => prev.filter(a => a.id !== newActivity.id));
+      }, 8000);
+    };
+
+    const timer = setInterval(() => {
+      if (Math.random() > 0.4) { // 60% chance to show an activity
+        generateActivity();
+      }
+    }, 10000); // Check every 10 seconds
+
+    return () => clearInterval(timer);
+  }, []);
 
   const userId = auth.currentUser?.uid;
   const isAdmin = auth.currentUser?.email === 'danlamimathias2025@gmail.com';
@@ -470,8 +539,9 @@ export function Dashboard() {
         
         const ad = ads.find(a => a.id === adIdToRecord);
         if (ad && userId) {
-          const createdAtTime = ad.createdAt?.toDate ? ad.createdAt.toDate().getTime() : now;
-          const currentCycle = Math.floor((now - createdAtTime) / CYCLE_DURATION);
+          const now = new Date();
+          // Use YYYYMMDD as a consistent local day cycle ID
+          const currentCycle = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
           
           try {
             await setDoc(doc(db, 'users', userId, 'clicks', `${ad.id}_${currentCycle}`), {
@@ -637,15 +707,13 @@ export function Dashboard() {
   const balance = userBalance !== null ? userBalance : derivedBalance;
   const canWithdraw = isWithdrawalWindow();
   
-  const CYCLE_DURATION = 24 * 60 * 60 * 1000;
-  const now = Date.now();
+  const now = new Date();
+  const todayCycle = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
 
   const adsWithCycles = ads.map(ad => {
-    const createdAtTime = ad.createdAt?.toDate ? ad.createdAt.toDate().getTime() : now;
-    const cycle = Math.floor((now - createdAtTime) / CYCLE_DURATION);
     return {
       ...ad,
-      cycle
+      cycle: todayCycle
     };
   });
 
@@ -1162,7 +1230,11 @@ export function Dashboard() {
               <div className="h-48 overflow-y-auto relative bg-white">
                 <div className="divide-y divide-gray-50 px-6">
                   <AnimatePresence initial={false}>
-                    {activities.map((act) => (
+                    {[...simulatedActivities, ...activities].sort((a, b) => {
+                      const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt).getTime();
+                      const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt).getTime();
+                      return timeB - timeA;
+                    }).slice(0, 15).map((act) => (
                       <motion.div
                         key={act.id}
                         initial={{ opacity: 0, x: -10 }}
@@ -1186,14 +1258,17 @@ export function Dashboard() {
                             <p className="text-[10px] font-black text-gray-900 uppercase tracking-tight">
                               {act.username}
                               <span className="font-medium text-gray-400 normal-case ml-1 lowercase">
-                                {act.type === 'withdrawal' ? 'requested a withdrawal' :
-                                 act.type === 'achievement' ? `earned "${act.title}"` :
-                                 act.type === 'checkin' ? 'performed a daily check-in' :
-                                 'completed a task'}
+                                {act.isSimulated ? act.text : (
+                                  act.type === 'withdrawal' ? 'requested a withdrawal' :
+                                  act.type === 'achievement' ? `earned "${act.title}"` :
+                                  act.type === 'checkin' ? 'performed a daily check-in' :
+                                  'completed a task'
+                                )}
                               </span>
                             </p>
                             <p className="text-[8px] font-black text-gray-300 uppercase tracking-widest mt-0.5">
-                              {act.createdAt?.toDate ? new Date(act.createdAt.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'JUST NOW'}
+                              {act.createdAt?.toDate ? new Date(act.createdAt.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 
+                               act.isSimulated ? new Date(act.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'JUST NOW'}
                             </p>
                           </div>
                         </div>
@@ -1485,19 +1560,27 @@ export function Dashboard() {
                   <h3 className="text-[11px] font-black text-gray-900 uppercase tracking-widest">Withdrawal History Log</h3>
                   <div className="h-1.5 w-1.5 rounded-full bg-green-500 animate-ping" />
                 </div>
-                {withdrawals.filter(w => w.status === 'approved').length === 0 ? (
+                {withdrawals.length === 0 ? (
                   <div className="bg-white rounded-3xl border border-dashed border-gray-200 p-12 text-center h-[400px] flex flex-col items-center justify-center">
                     <CheckCircle className="mx-auto h-12 w-12 text-gray-200 mb-4" />
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">No successful payouts yet</p>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">No payout history yet</p>
                   </div>
                 ) : (
                   <div className="bg-white rounded-3xl shadow-sm border border-gray-200 overflow-hidden h-[400px] flex flex-col">
                     <div className="divide-y divide-gray-100 overflow-y-auto">
-                      {withdrawals.filter(w => w.status === 'approved').map(w => (
+                      {withdrawals.sort((a, b) => {
+                        const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+                        const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+                        return timeB - timeA;
+                      }).map(w => (
                         <div key={w.id} className="p-5 hover:bg-gray-50 transition-colors">
-                          <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center">
-                              <div className="h-8 w-8 rounded-lg bg-green-50 text-green-600 flex items-center justify-center mr-3">
+                              <div className={`h-8 w-8 rounded-lg flex items-center justify-center mr-3 ${
+                                w.status === 'approved' ? 'bg-green-50 text-green-600' :
+                                w.status === 'rejected' ? 'bg-red-50 text-red-600' :
+                                'bg-blue-50 text-blue-600'
+                              }`}>
                                 <Banknote className="h-4 w-4" />
                               </div>
                               <div>
@@ -1505,8 +1588,38 @@ export function Dashboard() {
                                 <p className="text-[8px] font-bold text-gray-400 uppercase tracking-tight">{w.createdAt?.toDate ? new Date(w.createdAt.toDate()).toLocaleDateString() : 'N/A'}</p>
                               </div>
                             </div>
-                            <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest">Success</span>
+                            <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${
+                              w.status === 'approved' ? 'bg-green-100 text-green-700' :
+                              w.status === 'processing' ? 'bg-blue-100 text-blue-700' :
+                              w.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                              'bg-amber-100 text-amber-700'
+                            }`}>
+                              {w.status === 'approved' ? 'Paid' : w.status}
+                            </span>
                           </div>
+
+                          {/* Visual Status Steps */}
+                          {w.status !== 'rejected' ? (
+                            <div className="mb-4">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className={`text-[7px] font-black uppercase tracking-tighter ${w.status === 'pending' || w.status === 'processing' || w.status === 'approved' ? 'text-blue-900' : 'text-gray-300'}`}>Pending</span>
+                                <span className={`text-[7px] font-black uppercase tracking-tighter ${w.status === 'processing' || w.status === 'approved' ? 'text-blue-900' : 'text-gray-300'}`}>Processing</span>
+                                <span className={`text-[7px] font-black uppercase tracking-tighter ${w.status === 'approved' ? 'text-green-600' : 'text-gray-300'}`}>Paid</span>
+                              </div>
+                              <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden flex">
+                                <div className={`h-full transition-all duration-500 ${
+                                  w.status === 'pending' ? 'w-1/3 bg-blue-400' :
+                                  w.status === 'processing' ? 'w-2/3 bg-blue-600' :
+                                  w.status === 'approved' ? 'w-full bg-green-500' : 'w-0'
+                                }`} />
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="mb-4 p-2 bg-red-50 rounded-lg border border-red-100">
+                              <p className="text-[7px] font-black text-red-600 uppercase tracking-widest text-center">Request Declined - Contact Support</p>
+                            </div>
+                          )}
+
                           <div className="flex items-center justify-between text-[8px] font-black uppercase tracking-widest text-gray-400">
                             <span>Ref: {w.referenceId || `CAD-${w.id.substring(0, 8).toUpperCase()}`}</span>
                             <span>{w.bankName}</span>
@@ -1947,6 +2060,40 @@ export function Dashboard() {
           </div>
         )}
       </AnimatePresence>
+      {/* Live Activity Notification (Floating Toast) */}
+      <div className="fixed bottom-20 left-4 z-[45] pointer-events-none space-y-2">
+        <AnimatePresence>
+          {simulatedActivities.slice(0, 1).map((act) => (
+            <motion.div
+              key={act.id}
+              initial={{ opacity: 0, x: -50, scale: 0.9 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8, x: -20 }}
+              className="bg-white/95 backdrop-blur-md shadow-2xl border border-blue-100 rounded-2xl p-4 flex items-center space-x-4 max-w-xs pointer-events-auto"
+            >
+              <div className={`h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                act.type === 'withdrawal' ? 'bg-green-50 text-green-600' :
+                act.type === 'achievement' ? 'bg-yellow-50 text-yellow-600' :
+                'bg-blue-50 text-blue-600'
+              }`}>
+                {act.type === 'withdrawal' ? <Banknote className="h-5 w-5" /> :
+                 act.type === 'achievement' ? <Trophy className="h-5 w-5" /> :
+                 <MousePointerClick className="h-5 w-5" />}
+              </div>
+              <div>
+                <div className="flex items-center space-x-2">
+                  <p className="text-[10px] font-black text-gray-900 uppercase tracking-tighter">{act.username}</p>
+                  <div className="h-1 w-1 bg-green-500 rounded-full animate-pulse" />
+                </div>
+                <p className="text-[9px] font-bold text-gray-500 lowercase leading-tight mt-0.5">
+                  {act.text} {act.amount && <span className="text-blue-900 font-black">₦{act.amount.toLocaleString()}</span>}
+                </p>
+                <p className="text-[7px] font-black text-gray-300 uppercase tracking-widest mt-1">Live from {NIGERIAN_BANKS[Math.floor(Math.random() * NIGERIAN_BANKS.length)].split(' ')[0]} User</p>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

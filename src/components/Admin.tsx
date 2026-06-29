@@ -413,6 +413,7 @@ export function Admin() {
           </div>
         </div>
         <button
+          type="button"
           onClick={handleResetApp}
           disabled={resetAppLoading}
           className="inline-flex items-center px-4 py-2 border border-red-300 text-sm font-medium rounded-lg text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors disabled:opacity-50"
@@ -421,6 +422,20 @@ export function Admin() {
           Reset Application
         </button>
       </div>
+
+      {actionMessage && (
+        <div className={`mb-6 p-4 rounded-xl flex items-center justify-between shadow-sm border ${
+          actionMessage.type === 'success' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'
+        }`}>
+          <div className="flex items-center">
+            {actionMessage.type === 'success' ? <CheckCircle className="h-5 w-5 mr-2" /> : <XCircle className="h-5 w-5 mr-2" />}
+            <span className="text-sm font-bold uppercase tracking-tight">{actionMessage.text}</span>
+          </div>
+          <button onClick={() => setActionMessage(null)} className="text-gray-400 hover:text-gray-600">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex space-x-2 mb-6 overflow-x-auto pb-2">
@@ -471,6 +486,7 @@ export function Admin() {
               <h3 className="text-lg font-medium text-gray-900">Add New Ad</h3>
               <div className="flex space-x-2">
                 <button
+                  type="button"
                   onClick={handleUpdateAllAdsTo500}
                   disabled={updatingAds}
                   className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-900 disabled:opacity-50 transition-all"
@@ -479,6 +495,7 @@ export function Admin() {
                   Update All to ₦500
                 </button>
                 <button
+                  type="button"
                   onClick={handleAutoGenerateAds}
                   disabled={autoGenLoading}
                   className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 transition-all"
@@ -599,6 +616,7 @@ export function Admin() {
                 <div className="flex items-center gap-2">
                   {w.status === 'pending' && (
                     <button
+                      type="button"
                       onClick={() => handleUpdateWithdrawalStatus(w.id, 'processing')}
                       className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                     >
@@ -606,6 +624,7 @@ export function Admin() {
                     </button>
                   )}
                   <button
+                    type="button"
                     onClick={() => handleUpdateWithdrawalStatus(w.id, 'approved')}
                     className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                   >
@@ -613,6 +632,7 @@ export function Admin() {
                     Complete
                   </button>
                   <button
+                    type="button"
                     onClick={() => handleUpdateWithdrawalStatus(w.id, 'rejected')}
                     className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                   >
@@ -661,11 +681,6 @@ export function Admin() {
         <div className="bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
             <h3 className="text-lg font-medium text-gray-900">Registered Users</h3>
-            {actionMessage && (
-              <div className={`px-4 py-2 rounded-md text-sm ${actionMessage.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                {actionMessage.text}
-              </div>
-            )}
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -722,6 +737,7 @@ export function Admin() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <button
+                          type="button"
                           onClick={() => handleSendResetEmail(user.email, user.id)}
                           disabled={resetEmailLoading === user.id}
                           className="text-blue-600 hover:text-blue-900 mr-4 disabled:opacity-50"
@@ -730,6 +746,7 @@ export function Admin() {
                           {resetEmailLoading === user.id ? <Loader2 className="h-5 w-5 inline animate-spin" /> : <Mail className="h-5 w-5 inline" />}
                         </button>
                         <button
+                          type="button"
                           onClick={() => handleEditUser(user)}
                           className="text-blue-900 hover:text-blue-950 mr-4"
                           title="Edit User"
@@ -737,6 +754,7 @@ export function Admin() {
                           <Edit2 className="h-5 w-5 inline" />
                         </button>
                         <button
+                          type="button"
                           onClick={() => handleDeleteUser(user.id)}
                           className="text-red-600 hover:text-red-900"
                           title="Delete User"
@@ -814,6 +832,7 @@ export function Admin() {
                         {act.status === 'pending' && (
                           <div className="flex justify-end space-x-3">
                             <button
+                              type="button"
                               onClick={() => handleUpdateActivationStatus(act.id, act.userId, 'approved')}
                               className="text-green-600 hover:text-green-900 flex items-center"
                               title="Approve"
@@ -821,6 +840,7 @@ export function Admin() {
                               <CheckCircle className="h-5 w-5" />
                             </button>
                             <button
+                              type="button"
                               onClick={() => handleUpdateActivationStatus(act.id, act.userId, 'rejected')}
                               className="text-red-600 hover:text-red-900 flex items-center"
                               title="Reject"
