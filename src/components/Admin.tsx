@@ -105,12 +105,53 @@ export function Admin() {
   useEffect(() => {
     const unsubscribeAds = onSnapshot(
       collection(db, 'ads'),
-      (snapshot) => {
+      async (snapshot) => {
+        if (snapshot.empty) {
+          console.log('[Admin] No ads found in database. Automatically generating 5 default daily ads...');
+          const defaultAds = [
+            { title: 'Watch Video & Earn', url: 'https://www.youtube.com' },
+            { title: 'Visit Website Task 1', url: 'https://google.com' },
+            { title: 'Special Promo Click', url: 'https://bing.com' },
+            { title: 'Premium Reward Ad', url: 'https://yahoo.com' },
+            { title: 'Quick Earning Link', url: 'https://duckduckgo.com' }
+          ];
+          try {
+            for (const ad of defaultAds) {
+              await addDoc(collection(db, 'ads'), {
+                title: ad.title,
+                url: ad.url,
+                rewardAmount: 500,
+                createdAt: serverTimestamp()
+              });
+            }
+            setActionMessage({ type: 'success', text: 'Daily ads have been automatically generated!' });
+          } catch (err: any) {
+            console.error('[Admin] Failed to automatically generate ads:', err);
+          }
+          return;
+        }
+
         const adsData = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         })) as Ad[];
         setAds(adsData);
+
+        // Auto-update any ads with incorrect rewardAmount
+        const incorrectAds = adsData.filter(ad => ad.rewardAmount !== 500);
+        if (incorrectAds.length > 0) {
+          console.log(`[Admin] Found ${incorrectAds.length} ads with reward not equal to ₦500. Auto-healing...`);
+          try {
+            for (const ad of incorrectAds) {
+              await updateDoc(doc(db, 'ads', ad.id), {
+                rewardAmount: 500
+              });
+            }
+            setActionMessage({ type: 'success', text: `Automatically updated ${incorrectAds.length} ads to ₦500 reward!` });
+          } catch (err: any) {
+            console.error('[Admin] Failed to automatically update ads to ₦500:', err);
+          }
+        }
       },
       (error) => handleFirestoreError(error, OperationType.LIST, 'ads')
     );

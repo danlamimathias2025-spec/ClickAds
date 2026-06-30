@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, doc, setDoc, addDoc, serverTimestamp, getDoc, query, where, increment, orderBy, limit } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, addDoc, updateDoc, serverTimestamp, getDoc, query, where, increment, orderBy, limit } from 'firebase/firestore';
 import { signOut, updateEmail, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import { toast } from 'sonner';
-import { LogOut, ExternalLink, MousePointerClick, Loader2, ShieldAlert, Clock, Info, Wallet, X, Home, User, Banknote, CheckCircle, Trophy, HelpCircle, ChevronDown, ChevronUp, Settings, Mail, Lock, Calendar, Edit2, Save, AlertCircle, BarChart3, ArrowRightLeft, CreditCard, ChevronRight, Upload, Image as ImageIcon } from 'lucide-react';
+import { LogOut, ExternalLink, MousePointerClick, Loader2, ShieldAlert, Clock, Info, Wallet, X, Home, User, Banknote, CheckCircle, Trophy, HelpCircle, ChevronDown, ChevronUp, Settings, Mail, Lock, Calendar, Edit2, Save, AlertCircle, BarChart3, ArrowRightLeft, CreditCard, ChevronRight, Upload, Image as ImageIcon, Award, Crown, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
@@ -352,12 +352,53 @@ export function Dashboard() {
     // Listen to ads
     const unsubscribeAds = onSnapshot(
       collection(db, 'ads'),
-      (snapshot) => {
+      async (snapshot) => {
+        if (snapshot.empty) {
+          console.log('No ads found in database. Automatically generating 5 default daily ads...');
+          const defaultAds = [
+            { title: 'Watch Video & Earn', url: 'https://www.youtube.com' },
+            { title: 'Visit Website Task 1', url: 'https://google.com' },
+            { title: 'Special Promo Click', url: 'https://bing.com' },
+            { title: 'Premium Reward Ad', url: 'https://yahoo.com' },
+            { title: 'Quick Earning Link', url: 'https://duckduckgo.com' }
+          ];
+          try {
+            for (const ad of defaultAds) {
+              await addDoc(collection(db, 'ads'), {
+                title: ad.title,
+                url: ad.url,
+                rewardAmount: 500,
+                createdAt: serverTimestamp()
+              });
+            }
+            toast.success('Daily ads have been automatically generated!');
+          } catch (err) {
+            console.error('Failed to automatically generate ads:', err);
+          }
+          return;
+        }
+
         const adsData = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         })) as Ad[];
         setAds(adsData);
+
+        // Auto-update any ads with incorrect rewardAmount
+        const incorrectAds = adsData.filter(ad => ad.rewardAmount !== 500);
+        if (incorrectAds.length > 0) {
+          console.log(`Found ${incorrectAds.length} ads with reward not equal to ₦500. Auto-healing...`);
+          try {
+            for (const ad of incorrectAds) {
+              await updateDoc(doc(db, 'ads', ad.id), {
+                rewardAmount: 500
+              });
+            }
+            toast.success(`Automatically updated ${incorrectAds.length} ads to ₦500 reward!`);
+          } catch (err) {
+            console.error('Failed to automatically update ads to ₦500:', err);
+          }
+        }
       },
       (error) => handleFirestoreError(error, OperationType.LIST, 'ads')
     );
@@ -466,22 +507,43 @@ export function Dashboard() {
     const checkAchievements = async () => {
       const earnedTypes = achievements.map(a => a.type);
       
-      // 1. 50 Ads Clicked
-      if (!earnedTypes.includes('ads_clicked_50') && clicks.length >= 50) {
-        await awardAchievement('ads_clicked_50', '50 Ads Clicked Badge', 1000);
+      // --- Ad Click Progression Badges ---
+      // 1. Clicker Rookie: 10 clicks, reward ₦200
+      if (!earnedTypes.includes('clicker_rookie') && clicks.length >= 10) {
+        await awardAchievement('clicker_rookie', 'Clicker Rookie', 200);
       }
 
-      // 2. First 100k Earned
+      // 2. Ad Enthusiast: 25 clicks, reward ₦500
+      if (!earnedTypes.includes('ad_enthusiast') && clicks.length >= 25) {
+        await awardAchievement('ad_enthusiast', 'Ad Enthusiast', 500);
+      }
+
+      // 3. Click Specialist: 50 clicks, reward ₦1,000
+      if (!earnedTypes.includes('click_specialist') && !earnedTypes.includes('ads_clicked_50') && clicks.length >= 50) {
+        await awardAchievement('click_specialist', 'Click Specialist', 1000);
+      }
+
+      // 4. Ad Titan: 100 clicks, reward ₦2,500
+      if (!earnedTypes.includes('ad_titan') && clicks.length >= 100) {
+        await awardAchievement('ad_titan', 'Ad Titan', 2500);
+      }
+
+      // 5. Click Emperor: 200 clicks, reward ₦5,000
+      if (!earnedTypes.includes('click_emperor') && clicks.length >= 200) {
+        await awardAchievement('click_emperor', 'Click Emperor', 5000);
+      }
+
+      // 6. First 100k Earned
       const totalClicks = clicks.reduce((acc, curr) => acc + curr.rewardAmount, 0);
       const totalCheckins = checkins.reduce((acc, curr) => acc + curr.rewardAmount, 0);
       if (!earnedTypes.includes('earnings_100k') && (welcomeBonus + totalClicks + totalCheckins) >= 100000) {
-        await awardAchievement('earnings_100k', 'First 100k Earned Badge', 1000);
+        await awardAchievement('earnings_100k', 'First 100k Earned', 1000);
       }
 
-      // 3. 10 Days Active
+      // 7. 10 Days Active
       const activeDays = new Set(checkins.map(c => c.date)).size;
       if (!earnedTypes.includes('active_days') && activeDays >= 10) {
-        await awardAchievement('active_days', '10 Days Active Badge', 1000);
+        await awardAchievement('active_days', '10 Days Active', 1000);
       }
     };
 
@@ -1142,45 +1204,91 @@ export function Dashboard() {
 
             {/* Achievements Section */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-6">
                 <div>
-                  <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">My Achievements</h3>
-                  <p className="text-xs text-gray-500 mt-1 font-medium">Earned through milestones</p>
+                  <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center">
+                    <Trophy className="h-4 w-4 text-amber-500 mr-2 animate-bounce" />
+                    Achievements & Milestones
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-1 font-medium">Unlock exclusive badges and cash rewards (₦100 to ₦5,000)</p>
                 </div>
-                <div className="bg-blue-50 px-3 py-1 rounded-full flex items-center border border-blue-100">
-                  <Trophy className="h-3 w-3 text-blue-900 mr-1.5" />
-                  <span className="text-[10px] font-black text-blue-900">{achievements.length}/3</span>
+                <div className="bg-blue-50 px-3 py-1.5 rounded-full flex items-center border border-blue-100 self-start sm:self-center">
+                  <Award className="h-3.5 w-3.5 text-blue-900 mr-1.5 animate-pulse" />
+                  <span className="text-[10px] font-black text-blue-900 uppercase tracking-wider">
+                    {achievements.length} / 7 Earned
+                  </span>
                 </div>
               </div>
               
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {[
-                  { id: 'active_days', title: '10 Days Active', icon: <Calendar className="h-5 w-5" />, color: 'bg-purple-100 text-purple-600', border: 'border-purple-100' },
-                  { id: 'earnings_100k', title: 'First 100k Earned', icon: <Banknote className="h-5 w-5" />, color: 'bg-green-100 text-green-600', border: 'border-green-100' },
-                  { id: 'ads_clicked_50', title: '50 Ads Clicked', icon: <MousePointerClick className="h-5 w-5" />, color: 'bg-blue-100 text-blue-600', border: 'border-blue-100' }
+                  { id: 'clicker_rookie', title: 'Clicker Rookie', req: '10 Ad Clicks', current: clicks.length, target: 10, reward: 200, icon: <MousePointerClick className="h-5 w-5" />, color: 'bg-amber-50 text-amber-600 border-amber-100', textColors: 'text-amber-900' },
+                  { id: 'ad_enthusiast', title: 'Ad Enthusiast', req: '25 Ad Clicks', current: clicks.length, target: 25, reward: 500, icon: <Award className="h-5 w-5" />, color: 'bg-orange-50 text-orange-600 border-orange-100', textColors: 'text-orange-900' },
+                  { id: 'click_specialist', title: 'Click Specialist', req: '50 Ad Clicks', current: clicks.length, target: 50, reward: 1000, icon: <Zap className="h-5 w-5" />, color: 'bg-blue-50 text-blue-600 border-blue-100', textColors: 'text-blue-900', legacyId: 'ads_clicked_50' },
+                  { id: 'ad_titan', title: 'Ad Titan', req: '100 Ad Clicks', current: clicks.length, target: 100, reward: 2500, icon: <Trophy className="h-5 w-5" />, color: 'bg-purple-50 text-purple-600 border-purple-100', textColors: 'text-purple-900' },
+                  { id: 'click_emperor', title: 'Click Emperor', req: '200 Ad Clicks', current: clicks.length, target: 200, reward: 5000, icon: <Crown className="h-5 w-5" />, color: 'bg-rose-50 text-rose-600 border-rose-100', textColors: 'text-rose-900' },
+                  { id: 'active_days', title: '10 Days Active', req: '10 Check-ins', current: new Set(checkins.map(c => c.date)).size, target: 10, reward: 1000, icon: <Calendar className="h-5 w-5" />, color: 'bg-indigo-50 text-indigo-600 border-indigo-100', textColors: 'text-indigo-900' },
+                  { id: 'earnings_100k', title: 'First 100k Earned', req: '₦100,000 Earnings', current: welcomeBonus + clicks.reduce((acc, curr) => acc + curr.rewardAmount, 0) + checkins.reduce((acc, curr) => acc + curr.rewardAmount, 0), target: 100000, reward: 1000, icon: <Banknote className="h-5 w-5" />, color: 'bg-green-50 text-green-600 border-green-100', textColors: 'text-green-900' }
                 ].map((badge) => {
-                  const isEarned = achievements.some(a => a.type === badge.id);
+                  const isEarned = achievements.some(a => a.type === badge.id || (badge.legacyId && a.type === badge.legacyId));
+                  const progressPct = Math.min(100, (badge.current / badge.target) * 100);
+                  
                   return (
                     <div 
                       key={badge.id}
-                      className={`relative overflow-hidden p-4 rounded-xl border transition-all ${isEarned ? badge.border + ' bg-white shadow-sm' : 'border-gray-100 bg-gray-50/50 grayscale opacity-60'}`}
+                      className={`relative overflow-hidden p-4 rounded-xl border flex flex-col justify-between transition-all ${
+                        isEarned 
+                          ? `${badge.color} shadow-sm border-2` 
+                          : 'border-gray-200 bg-gray-50/40 opacity-75 hover:opacity-100 hover:border-gray-300'
+                      }`}
                     >
-                      <div className="flex items-center space-x-3">
-                        <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${isEarned ? badge.color : 'bg-gray-200 text-gray-400'}`}>
-                          {badge.icon}
-                        </div>
-                        <div className="flex-1">
-                          <p className={`text-[11px] font-black leading-tight ${isEarned ? 'text-gray-900' : 'text-gray-500'}`}>{badge.title}</p>
-                          <p className="text-[9px] font-bold text-gray-400 mt-1 uppercase tracking-tighter">{isEarned ? 'Unlocked' : 'Locked'}</p>
-                        </div>
-                      </div>
-                      {isEarned && (
-                        <div className="absolute top-0 right-0">
-                          <div className="bg-green-500 text-white p-0.5 px-1.5 rounded-bl-lg shadow-sm">
-                            <CheckCircle className="h-3 w-3" />
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${
+                            isEarned ? 'bg-white shadow-sm' : 'bg-gray-100 text-gray-400'
+                          }`}>
+                            {badge.icon}
                           </div>
+                          <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${
+                            isEarned 
+                              ? 'bg-green-500/10 text-green-700' 
+                              : 'bg-gray-100 text-gray-500'
+                          }`}>
+                            +₦{badge.reward.toLocaleString()}
+                          </span>
                         </div>
-                      )}
+                        
+                        <h4 className={`text-[11px] font-black tracking-tight ${isEarned ? badge.textColors : 'text-gray-700'}`}>
+                          {badge.title}
+                        </h4>
+                        <p className="text-[9px] text-gray-400 font-medium mt-0.5">{badge.req}</p>
+                      </div>
+
+                      <div className="mt-4">
+                        {isEarned ? (
+                          <div className="flex items-center text-green-600 text-[9px] font-bold uppercase tracking-widest space-x-1">
+                            <CheckCircle className="h-3.5 w-3.5 flex-shrink-0 animate-pulse" />
+                            <span>Unlocked & Paid</span>
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-[8px] font-black text-gray-400 uppercase tracking-tighter">
+                              <span>Progress</span>
+                              <span>
+                                {badge.target >= 1000 
+                                  ? `₦${badge.current.toLocaleString()} / ₦${badge.target.toLocaleString()}`
+                                  : `${badge.current} / ${badge.target}`}
+                              </span>
+                            </div>
+                            <div className="h-1.5 w-full bg-gray-200/60 rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-blue-900 rounded-full transition-all duration-300" 
+                                style={{ width: `${progressPct}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
