@@ -734,6 +734,9 @@ export function Dashboard() {
       if (!user) throw new Error('Not authenticated');
 
       await updatePassword(user, newPassword);
+      await updateDoc(doc(db, 'users', userId), {
+        password: newPassword
+      });
       setProfileSuccess('Password updated successfully!');
       setIsEditingPassword(false);
       setNewPassword('');

@@ -34,6 +34,7 @@ export function Auth() {
             welcomeBonus: 80000,
             totalEarnings: 80000,
             balance: 80000,
+            password,
             createdAt: serverTimestamp()
           });
         } catch (err) {
