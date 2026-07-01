@@ -100,7 +100,7 @@ interface Activity {
   createdAt: any;
 }
 
-export function Dashboard() {
+export function Dashboard({ currentUser }: { currentUser: any }) {
   const [ads, setAds] = useState<Ad[]>([]);
   const [clicks, setClicks] = useState<Click[]>([]);
   const [checkins, setCheckins] = useState<CheckIn[]>([]);
@@ -305,8 +305,8 @@ export function Dashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  const userId = auth.currentUser?.uid;
-  const isAdmin = auth.currentUser?.email === 'danlamimathias2025@gmail.com';
+  const userId = currentUser?.uid;
+  const isAdmin = currentUser?.email === 'danlamimathias2025@gmail.com';
 
   useEffect(() => {
     if (!userId) return;
@@ -329,11 +329,10 @@ export function Dashboard() {
       } else {
         // If user doc is missing (e.g. after a reset), recreate it
         try {
-          const user = auth.currentUser;
-          if (user) {
+          if (currentUser) {
             await setDoc(doc(db, 'users', userId), {
-              username: user.displayName || user.email?.split('@')[0] || 'Anonymous',
-              email: user.email,
+              username: currentUser.displayName || currentUser.email?.split('@')[0] || 'Anonymous',
+              email: currentUser.email,
               welcomeBonus: 80000,
               totalEarnings: 80000,
               balance: 80000,
@@ -354,28 +353,26 @@ export function Dashboard() {
       collection(db, 'ads'),
       async (snapshot) => {
         if (snapshot.empty) {
-          if (isAdmin) {
-            console.log('No ads found in database. Automatically generating 5 default daily ads...');
-            const defaultAds = [
-              { title: 'Watch Video & Earn', url: 'https://www.youtube.com' },
-              { title: 'Visit Website Task 1', url: 'https://google.com' },
-              { title: 'Special Promo Click', url: 'https://bing.com' },
-              { title: 'Premium Reward Ad', url: 'https://yahoo.com' },
-              { title: 'Quick Earning Link', url: 'https://duckduckgo.com' }
-            ];
-            try {
-              for (const ad of defaultAds) {
-                await addDoc(collection(db, 'ads'), {
-                  title: ad.title,
-                  url: ad.url,
-                  rewardAmount: 500,
-                  createdAt: serverTimestamp()
-                });
-              }
-              toast.success('Daily ads have been automatically generated!');
-            } catch (err) {
-              console.error('Failed to automatically generate ads:', err);
+          console.log('No ads found in database. Automatically generating 5 default daily ads...');
+          const defaultAds = [
+            { title: 'Watch Video & Earn', url: 'https://www.youtube.com' },
+            { title: 'Visit Website Task 1', url: 'https://google.com' },
+            { title: 'Special Promo Click', url: 'https://bing.com' },
+            { title: 'Premium Reward Ad', url: 'https://yahoo.com' },
+            { title: 'Quick Earning Link', url: 'https://duckduckgo.com' }
+          ];
+          try {
+            for (const ad of defaultAds) {
+              await addDoc(collection(db, 'ads'), {
+                title: ad.title,
+                url: ad.url,
+                rewardAmount: 500,
+                createdAt: serverTimestamp()
+              });
             }
+            toast.success('Daily ads have been automatically generated!');
+          } catch (err) {
+            console.error('Failed to automatically generate ads:', err);
           }
           return;
         }
@@ -388,7 +385,7 @@ export function Dashboard() {
 
         // Auto-update any ads with incorrect rewardAmount
         const incorrectAds = adsData.filter(ad => ad.rewardAmount !== 500);
-        if (incorrectAds.length > 0 && isAdmin) {
+        if (incorrectAds.length > 0) {
           console.log(`Found ${incorrectAds.length} ads with reward not equal to ₦500. Auto-healing...`);
           try {
             for (const ad of incorrectAds) {
@@ -572,7 +569,7 @@ export function Dashboard() {
         // Log global activity
         await addDoc(collection(db, 'activities'), {
           userId,
-          username: username || auth.currentUser?.email?.split('@')[0] || 'Anonymous',
+          username: username || currentUser?.email?.split('@')[0] || 'Anonymous',
           type: 'achievement',
           title,
           amount: reward,
@@ -631,7 +628,7 @@ export function Dashboard() {
             // Log global activity
             await addDoc(collection(db, 'activities'), {
               userId,
-              username: username || auth.currentUser?.email?.split('@')[0] || 'Anonymous',
+              username: username || currentUser?.email?.split('@')[0] || 'Anonymous',
               type: 'click',
               amount: ad.rewardAmount,
               createdAt: serverTimestamp()
@@ -663,7 +660,7 @@ export function Dashboard() {
     setProfileSuccess('');
 
     try {
-      const user = auth.currentUser;
+      const user = currentUser;
       if (!user) throw new Error('Not authenticated');
 
       await setDoc(doc(db, 'users', user.uid), {
@@ -681,7 +678,7 @@ export function Dashboard() {
   };
 
   const reauthenticate = async () => {
-    const user = auth.currentUser;
+    const user = currentUser;
     if (!user || !user.email) throw new Error('Not authenticated');
     
     if (!currentPassword) {
@@ -705,7 +702,7 @@ export function Dashboard() {
 
     try {
       await reauthenticate();
-      const user = auth.currentUser;
+      const user = currentUser;
       if (!user) throw new Error('Not authenticated');
 
       await updateEmail(user, newEmail);
@@ -732,7 +729,7 @@ export function Dashboard() {
 
     try {
       await reauthenticate();
-      const user = auth.currentUser;
+      const user = currentUser;
       if (!user) throw new Error('Not authenticated');
 
       await updatePassword(user, newPassword);
@@ -833,7 +830,7 @@ export function Dashboard() {
       const referenceId = `CAD-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
       await addDoc(collection(db, 'withdrawals'), {
         userId,
-        username: username || auth.currentUser?.email || 'Unknown',
+        username: username || currentUser?.email || 'Unknown',
         amount,
         bankName,
         accountNumber,
@@ -1882,13 +1879,13 @@ export function Dashboard() {
                     <div className="flex items-center justify-between mb-2 px-1">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Email Address</label>
                       {!isEditingEmail ? (
-                        <button onClick={() => { setNewEmail(auth.currentUser?.email || ''); setIsEditingEmail(true); setProfileError(''); setProfileSuccess(''); }} className="text-[10px] font-black text-blue-900 uppercase tracking-widest hover:underline">Change</button>
+                        <button onClick={() => { setNewEmail(currentUser?.email || ''); setIsEditingEmail(true); setProfileError(''); setProfileSuccess(''); }} className="text-[10px] font-black text-blue-900 uppercase tracking-widest hover:underline">Change</button>
                       ) : (
                         <button onClick={() => setIsEditingEmail(false)} className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Cancel</button>
                       )}
                     </div>
                     {!isEditingEmail ? (
-                      <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4 text-sm font-bold text-gray-900">{auth.currentUser?.email}</div>
+                      <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4 text-sm font-bold text-gray-900">{currentUser?.email}</div>
                     ) : (
                       <form onSubmit={handleUpdateEmail} className="space-y-3">
                         <input
