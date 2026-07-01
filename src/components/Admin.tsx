@@ -294,8 +294,8 @@ export function Admin() {
   };
 
   const handleEditUser = (user: User) => {
-    setEditingUser(user);
-    setEditUsername(user.username);
+    setEditingUser({...user});
+    setEditUsername(user.username || '');
     setEditWelcomeBonus((user.welcomeBonus || 0).toString());
     setEditBalance((user.balance !== undefined ? user.balance : (userStats[user.id]?.balance || 0)).toString());
     setEditPassword(user.password || '');
@@ -818,7 +818,10 @@ export function Admin() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleEditUser(user)}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handleEditUser(user);
+                          }}
                           className="text-blue-900 hover:text-blue-950 mr-4"
                           title="Edit User"
                         >
