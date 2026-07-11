@@ -764,8 +764,8 @@ export function Dashboard() {
   const totalCheckins = checkins.reduce((sum, c) => sum + c.rewardAmount, 0);
   const totalWithdrawals = withdrawals.filter(w => w.status !== 'rejected').reduce((sum, w) => sum + w.amount, 0);
   const totalAchievements = achievements.reduce((sum, a) => sum + a.rewardAmount, 0);
-  const totalEarnings = welcomeBonus + totalClicks + totalCheckins + totalAchievements;
-  const derivedBalance = totalEarnings - totalWithdrawals;
+  const totalEarnings = (welcomeBonus + totalClicks + totalCheckins + totalAchievements) - totalWithdrawals;
+  const derivedBalance = totalEarnings;
   const balance = userBalance !== null ? userBalance : derivedBalance;
   const canWithdraw = isWithdrawalWindow();
   
@@ -847,9 +847,10 @@ export function Dashboard() {
         createdAt: serverTimestamp()
       });
 
-      // Update balance on user doc
+      // Update balance and total earnings on user doc
       await setDoc(doc(db, 'users', userId), {
-        balance: increment(-amount)
+        balance: increment(-amount),
+        totalEarnings: increment(-amount)
       }, { merge: true });
 
       toast.success(`Withdrawal request for ₦${amount.toLocaleString()} submitted!`);
@@ -1020,8 +1021,8 @@ export function Dashboard() {
                   <Wallet className="h-5 w-5 text-white" />
                 </div>
                 <div>
-                  <p className="text-[10px] text-blue-200 font-black uppercase tracking-widest text-left">Available Balance</p>
-                  <p className="text-xl font-black text-white leading-none">₦{balance.toLocaleString()}</p>
+                  <p className="text-[10px] text-blue-200 font-black uppercase tracking-widest text-left">Total Earnings</p>
+                  <p className="text-xl font-black text-white leading-none">₦{totalEarnings.toLocaleString()}</p>
                 </div>
               </div>
             </div>
@@ -1314,22 +1315,7 @@ export function Dashboard() {
         {activeTab === 'wallet' && (
           <div className="space-y-8 max-w-4xl mx-auto">
             {/* Wallet Header */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-200">
-                <div className="flex items-center space-x-4 mb-4">
-                  <div className="h-12 w-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-900">
-                    <Wallet className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Main Balance</h3>
-                    <p className="text-2xl font-black text-gray-900">₦{balance.toLocaleString()}</p>
-                  </div>
-                </div>
-                <div className="pt-4 border-t border-gray-50 flex items-center justify-between text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                  <span>Pending: ₦0.00</span>
-                  <span className="text-green-600">Active</span>
-                </div>
-              </div>
+            <div className="grid grid-cols-1 gap-6">
               <div className="bg-blue-900 p-6 rounded-3xl shadow-xl shadow-blue-900/10 text-white relative overflow-hidden">
                 <div className="absolute top-0 right-0 -mr-4 -mt-4 w-24 h-24 bg-white/10 rounded-full blur-xl" />
                 <div className="relative z-10">

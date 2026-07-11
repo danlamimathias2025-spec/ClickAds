@@ -16,6 +16,10 @@ export class ErrorBoundary extends React.Component<Props, State> {
   };
 
   public static getDerivedStateFromError(error: Error): State {
+    // Ignore benign cross-origin script errors
+    if (error && (error.message === 'Script error.' || error.message?.includes('Script error'))) {
+      return { hasError: false, error: null };
+    }
     return { hasError: true, error };
   }
 
