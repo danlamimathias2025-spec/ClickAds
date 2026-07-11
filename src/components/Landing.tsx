@@ -104,7 +104,7 @@ export function Landing() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
               <div className="bg-white p-6 rounded-xl shadow-sm">
                 <h4 className="font-bold text-gray-900 mb-2">Minimum Withdrawal</h4>
-                <p className="text-blue-900 font-semibold text-lg">₦300,000</p>
+                <p className="text-blue-900 font-semibold text-lg">₦250,000</p>
               </div>
               <div className="bg-white p-6 rounded-xl shadow-sm">
                 <h4 className="font-bold text-gray-900 mb-2">Direct Payouts</h4>
@@ -141,7 +141,7 @@ export function Landing() {
                     <span className="text-purple-600 font-bold">3</span>
                   </span>
                   <h3 className="font-bold text-lg text-gray-900 mb-1">Reach the Goal</h3>
-                  <p className="text-gray-600">Accumulate up to ₦300,000 in your wallet.</p>
+                  <p className="text-gray-600">Accumulate up to ₦250,000 in your wallet.</p>
                 </li>
                 <li className="ml-6">
                   <span className="absolute flex items-center justify-center w-8 h-8 bg-purple-100 rounded-full -left-4 ring-4 ring-white">

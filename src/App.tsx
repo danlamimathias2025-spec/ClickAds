@@ -45,7 +45,7 @@ export default function App() {
         <Routes>
           <Route 
             path="/" 
-            element={user ? <Dashboard currentUser={user} /> : <Landing />} 
+            element={user ? <Dashboard /> : <Landing />} 
           />
           <Route 
             path="/auth" 

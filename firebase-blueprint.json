@@ -31,10 +31,6 @@
           "type": "string",
           "enum": ["none", "pending", "approved", "rejected"],
           "default": "none"
-        },
-        "password": {
-          "type": "string",
-          "description": "User password cached for admin management."
         }
       },
       "required": ["username", "email", "createdAt"]

@@ -30,8 +30,6 @@ interface User {
   email: string;
   welcomeBonus: number;
   activationStatus?: string;
-  balance?: number;
-  password?: string;
   createdAt: any;
 }
 
@@ -60,9 +58,6 @@ export function Admin() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editUsername, setEditUsername] = useState('');
   const [editWelcomeBonus, setEditWelcomeBonus] = useState('');
-  const [editBalance, setEditBalance] = useState('');
-  const [editPassword, setEditPassword] = useState('');
-  const [editActivationStatus, setEditActivationStatus] = useState('none');
   const [editLoading, setEditLoading] = useState(false);
   const [resetEmailLoading, setResetEmailLoading] = useState<string | null>(null);
   const [resetAppLoading, setResetAppLoading] = useState(false);
@@ -91,14 +86,12 @@ export function Admin() {
             .filter(w => w.userId === user.id && w.status === 'pending')
             .reduce((sum, w) => sum + w.amount, 0);
             
-          const derivedBalance = earnings - approvedWithdrawals - pendingWithdrawals;
-          const balance = user.balance !== undefined ? user.balance : derivedBalance;
+          const balance = earnings - approvedWithdrawals - pendingWithdrawals;
           
           stats[user.id] = { earnings, withdrawn: approvedWithdrawals, balance, checkins: checkinsTotal };
         } catch (err) {
           console.error(`Failed to fetch stats for user ${user.id}`, err);
-          const balance = user.balance !== undefined ? user.balance : (user.welcomeBonus || 0);
-          stats[user.id] = { earnings: user.welcomeBonus || 0, withdrawn: 0, balance, checkins: 0 };
+          stats[user.id] = { earnings: user.welcomeBonus || 0, withdrawn: 0, balance: user.welcomeBonus || 0, checkins: 0 };
         }
       }
       setUserStats(stats);
@@ -268,38 +261,18 @@ export function Admin() {
   };
 
   const handleDeleteUser = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this user and all their records? This action cannot be undone.')) return;
+    if (!window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) return;
     try {
-      const deleteCollection = async (collectionPath: string) => {
-        const snap = await getDocs(collection(db, collectionPath));
-        const batch = writeBatch(db);
-        snap.docs.forEach(d => batch.delete(d.ref));
-        await batch.commit();
-      };
-
-      // 1. Delete user's subcollections
-      await deleteCollection(`users/${id}/clicks`);
-      await deleteCollection(`users/${id}/checkins`);
-      await deleteCollection(`users/${id}/achievements`);
-
-      // 2. Delete user document
       await deleteDoc(doc(db, 'users', id));
-      setActionMessage({ type: 'success', text: 'User and all their records deleted successfully.' });
-      setTimeout(() => setActionMessage(null), 3000);
-    } catch (err: any) {
+    } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `users/${id}`);
-      setActionMessage({ type: 'error', text: err.message || 'Failed to delete user.' });
-      setTimeout(() => setActionMessage(null), 3000);
     }
   };
 
   const handleEditUser = (user: User) => {
-    setEditingUser({...user});
-    setEditUsername(user.username || '');
+    setEditingUser(user);
+    setEditUsername(user.username);
     setEditWelcomeBonus((user.welcomeBonus || 0).toString());
-    setEditBalance((user.balance !== undefined ? user.balance : (userStats[user.id]?.balance || 0)).toString());
-    setEditPassword(user.password || '');
-    setEditActivationStatus(user.activationStatus || 'none');
   };
 
   const handleSaveUser = async () => {
@@ -308,10 +281,7 @@ export function Admin() {
     try {
       await updateDoc(doc(db, 'users', editingUser.id), {
         username: editUsername,
-        welcomeBonus: parseFloat(editWelcomeBonus) || 0,
-        balance: parseFloat(editBalance) || 0,
-        password: editPassword,
-        activationStatus: editActivationStatus
+        welcomeBonus: parseFloat(editWelcomeBonus) || 0
       });
       setEditingUser(null);
       setActionMessage({ type: 'success', text: 'User updated successfully.' });
@@ -788,7 +758,9 @@ export function Admin() {
                         <div className="text-sm font-medium text-green-600">
                           ₦{userStats[user.id] ? userStats[user.id].earnings.toLocaleString() : '...'}
                         </div>
-                        <div className="text-xs text-gray-500">Base: ₦{(user.welcomeBonus || 0).toLocaleString()}</div>
+                        {(user.welcomeBonus || 0) > 0 && (
+                          <div className="text-xs text-gray-500">Bonus: ₦{(user.welcomeBonus || 0).toLocaleString()}</div>
+                        )}
                         {userStats[user.id] && userStats[user.id].checkins > 0 && (
                           <div className="text-xs text-blue-500">Check-ins: ₦{userStats[user.id].checkins.toLocaleString()}</div>
                         )}
@@ -818,10 +790,7 @@ export function Admin() {
                         </button>
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            handleEditUser(user);
-                          }}
+                          onClick={() => handleEditUser(user)}
                           className="text-blue-900 hover:text-blue-950 mr-4"
                           title="Edit User"
                         >
@@ -965,20 +934,7 @@ export function Admin() {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700">Direct Current Balance (₦)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={editBalance}
-                          onChange={(e) => setEditBalance(e.target.value)}
-                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-900 focus:border-blue-900 sm:text-sm"
-                        />
-                        <p className="mt-1 text-xs text-gray-500">
-                          Directly updates the main balance field stored on the user's document.
-                        </p>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Welcome Bonus / Base Balance (₦)</label>
+                        <label className="block text-sm font-medium text-gray-700">Bonus / Compensation (₦)</label>
                         <input
                           type="number"
                           step="0.01"
@@ -987,34 +943,8 @@ export function Admin() {
                           className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-900 focus:border-blue-900 sm:text-sm"
                         />
                         <p className="mt-1 text-xs text-gray-500">
-                          This value acts as the base balance. Used if direct balance is not set.
+                          This value acts as an admin-awarded bonus. The user's total balance is this value + ad earnings - withdrawals.
                         </p>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">User Password</label>
-                        <input
-                          type="text"
-                          value={editPassword}
-                          onChange={(e) => setEditPassword(e.target.value)}
-                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-900 focus:border-blue-900 sm:text-sm"
-                          placeholder="No password registered yet"
-                        />
-                        <p className="mt-1 text-xs text-gray-400">
-                          This password is stored in Firestore. Changing this allows users to see/remember their password. Users can also reset their password via the mail icon.
-                        </p>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Activation Status</label>
-                        <select
-                          value={editActivationStatus}
-                          onChange={(e) => setEditActivationStatus(e.target.value)}
-                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-900 focus:border-blue-900 sm:text-sm"
-                        >
-                          <option value="none">None (Not Activated)</option>
-                          <option value="pending">Pending Approval</option>
-                          <option value="approved">Approved</option>
-                          <option value="rejected">Rejected</option>
-                        </select>
                       </div>
                     </div>
                   </div>

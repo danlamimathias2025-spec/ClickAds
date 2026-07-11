@@ -100,7 +100,7 @@ interface Activity {
   createdAt: any;
 }
 
-export function Dashboard({ currentUser }: { currentUser: any }) {
+export function Dashboard() {
   const [ads, setAds] = useState<Ad[]>([]);
   const [clicks, setClicks] = useState<Click[]>([]);
   const [checkins, setCheckins] = useState<CheckIn[]>([]);
@@ -236,7 +236,7 @@ export function Dashboard({ currentUser }: { currentUser: any }) {
     },
     {
       q: "What is the minimum withdrawal amount?",
-      a: "To ensure sustainable payouts, the minimum withdrawal limit is set to ₦300,000."
+      a: "To ensure sustainable payouts, the minimum withdrawal limit is set to ₦250,000."
     },
     {
       q: "When are withdrawals processed?",
@@ -259,7 +259,7 @@ export function Dashboard({ currentUser }: { currentUser: any }) {
   ];
 
   const SIMULATED_ACTIONS = [
-    { type: 'withdrawal', text: 'just requested a withdrawal of', min: 300000, max: 850000 },
+    { type: 'withdrawal', text: 'just requested a withdrawal of', min: 250000, max: 850000 },
     { type: 'click', text: 'just completed an ad task earning', min: 500, max: 500 },
     { type: 'checkin', text: 'just claimed their daily check-in bonus of', min: 500, max: 500 },
     { type: 'achievement', text: 'just unlocked the 50 Ads Clicked Badge!', amount: 1000 },
@@ -305,8 +305,8 @@ export function Dashboard({ currentUser }: { currentUser: any }) {
     return () => clearInterval(timer);
   }, []);
 
-  const userId = currentUser?.uid;
-  const isAdmin = currentUser?.email === 'danlamimathias2025@gmail.com';
+  const userId = auth.currentUser?.uid;
+  const isAdmin = auth.currentUser?.email === 'danlamimathias2025@gmail.com';
 
   useEffect(() => {
     if (!userId) return;
@@ -329,10 +329,11 @@ export function Dashboard({ currentUser }: { currentUser: any }) {
       } else {
         // If user doc is missing (e.g. after a reset), recreate it
         try {
-          if (currentUser) {
+          const user = auth.currentUser;
+          if (user) {
             await setDoc(doc(db, 'users', userId), {
-              username: currentUser.displayName || currentUser.email?.split('@')[0] || 'Anonymous',
-              email: currentUser.email,
+              username: user.displayName || user.email?.split('@')[0] || 'Anonymous',
+              email: user.email,
               welcomeBonus: 80000,
               totalEarnings: 80000,
               balance: 80000,
@@ -569,7 +570,7 @@ export function Dashboard({ currentUser }: { currentUser: any }) {
         // Log global activity
         await addDoc(collection(db, 'activities'), {
           userId,
-          username: username || currentUser?.email?.split('@')[0] || 'Anonymous',
+          username: username || auth.currentUser?.email?.split('@')[0] || 'Anonymous',
           type: 'achievement',
           title,
           amount: reward,
@@ -628,7 +629,7 @@ export function Dashboard({ currentUser }: { currentUser: any }) {
             // Log global activity
             await addDoc(collection(db, 'activities'), {
               userId,
-              username: username || currentUser?.email?.split('@')[0] || 'Anonymous',
+              username: username || auth.currentUser?.email?.split('@')[0] || 'Anonymous',
               type: 'click',
               amount: ad.rewardAmount,
               createdAt: serverTimestamp()
@@ -660,7 +661,7 @@ export function Dashboard({ currentUser }: { currentUser: any }) {
     setProfileSuccess('');
 
     try {
-      const user = currentUser;
+      const user = auth.currentUser;
       if (!user) throw new Error('Not authenticated');
 
       await setDoc(doc(db, 'users', user.uid), {
@@ -678,7 +679,7 @@ export function Dashboard({ currentUser }: { currentUser: any }) {
   };
 
   const reauthenticate = async () => {
-    const user = currentUser;
+    const user = auth.currentUser;
     if (!user || !user.email) throw new Error('Not authenticated');
     
     if (!currentPassword) {
@@ -702,7 +703,7 @@ export function Dashboard({ currentUser }: { currentUser: any }) {
 
     try {
       await reauthenticate();
-      const user = currentUser;
+      const user = auth.currentUser;
       if (!user) throw new Error('Not authenticated');
 
       await updateEmail(user, newEmail);
@@ -729,13 +730,10 @@ export function Dashboard({ currentUser }: { currentUser: any }) {
 
     try {
       await reauthenticate();
-      const user = currentUser;
+      const user = auth.currentUser;
       if (!user) throw new Error('Not authenticated');
 
       await updatePassword(user, newPassword);
-      await updateDoc(doc(db, 'users', userId), {
-        password: newPassword
-      });
       setProfileSuccess('Password updated successfully!');
       setIsEditingPassword(false);
       setNewPassword('');
@@ -813,8 +811,8 @@ export function Dashboard({ currentUser }: { currentUser: any }) {
     }
     
     const amount = parseFloat(withdrawAmount);
-    if (isNaN(amount) || amount < 300000) {
-      setWithdrawError('Minimum withdrawal amount is ₦300,000.');
+    if (isNaN(amount) || amount < 250000) {
+      setWithdrawError('Minimum withdrawal amount is ₦250,000.');
       return;
     }
     
@@ -830,7 +828,7 @@ export function Dashboard({ currentUser }: { currentUser: any }) {
       const referenceId = `CAD-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
       await addDoc(collection(db, 'withdrawals'), {
         userId,
-        username: username || currentUser?.email || 'Unknown',
+        username: username || auth.currentUser?.email || 'Unknown',
         amount,
         bankName,
         accountNumber,
@@ -955,7 +953,7 @@ export function Dashboard({ currentUser }: { currentUser: any }) {
     }
   };
 
-  const isEligibleForActivation = (userBalance || 0) >= 300000;
+  const isEligibleForActivation = balance >= 250000;
 
   if (loading) {
     return (
@@ -997,87 +995,7 @@ export function Dashboard({ currentUser }: { currentUser: any }) {
           </div>
         )}
       </AnimatePresence>
-      <AnimatePresence>
-        {showWelcomeModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl"
-            >
-              <div className="bg-gradient-to-br from-blue-900 to-purple-800 p-8 text-center text-white relative">
-                <div className="absolute top-4 right-4">
-                  <button 
-                    onClick={() => {
-                      setShowWelcomeModal(false);
-                      if (userId) localStorage.setItem(`welcome_seen_${userId}`, 'true');
-                    }}
-                    className="p-1 hover:bg-white/20 rounded-full transition-colors"
-                  >
-                    <X className="h-6 w-6" />
-                  </button>
-                </div>
-                <div className="h-20 w-20 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-md">
-                  <Trophy className="h-10 w-10 text-yellow-300" />
-                </div>
-                <h2 className="text-3xl font-black mb-2">Welcome to ClickAds!</h2>
-                <p className="text-blue-100">Your journey to earning starts here.</p>
-              </div>
-              
-              <div className="p-8">
-                <div className="bg-green-50 border border-green-100 rounded-2xl p-4 mb-6 flex items-center">
-                  <div className="h-12 w-12 bg-green-100 rounded-xl flex items-center justify-center mr-4">
-                    <Wallet className="h-6 w-6 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-green-700 font-bold uppercase tracking-wider">Sign-up Bonus Credited</p>
-                    <p className="text-2xl font-black text-green-800">₦80,000.00</p>
-                  </div>
-                </div>
 
-                <div className="space-y-4 mb-8">
-                  <h3 className="font-bold text-gray-900">Platform Rules:</h3>
-                  <div className="flex items-start">
-                    <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center mr-3 mt-0.5">
-                      <span className="text-xs font-bold text-blue-900">1</span>
-                    </div>
-                    <p className="text-sm text-gray-600">Daily Check-in rewards you with <span className="font-bold text-gray-900">₦500</span> instantly.</p>
-                  </div>
-                  <div className="flex items-start">
-                    <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center mr-3 mt-0.5">
-                      <span className="text-xs font-bold text-blue-900">2</span>
-                    </div>
-                    <p className="text-sm text-gray-600">Complete up to <span className="font-bold text-gray-900">5 ad clicks</span> daily to boost your earnings.</p>
-                  </div>
-                  <div className="flex items-start">
-                    <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center mr-3 mt-0.5">
-                      <span className="text-xs font-bold text-blue-900">3</span>
-                    </div>
-                    <p className="text-sm text-gray-600">Minimum withdrawal limit is <span className="font-bold text-gray-900">₦300,000</span>.</p>
-                  </div>
-                  <div className="flex items-start">
-                    <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center mr-3 mt-0.5">
-                      <span className="text-xs font-bold text-blue-900">4</span>
-                    </div>
-                    <p className="text-sm text-gray-600">Withdrawals are processed every <span className="font-bold text-gray-900">First Friday</span> of the month.</p>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => {
-                    setShowWelcomeModal(false);
-                    if (userId) localStorage.setItem(`welcome_seen_${userId}`, 'true');
-                  }}
-                  className="w-full py-4 bg-blue-900 text-white rounded-2xl font-bold hover:bg-blue-950 transition-colors shadow-lg shadow-blue-900/20"
-                >
-                  Start Earning Now
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
       <nav className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
@@ -1299,7 +1217,7 @@ export function Dashboard({ currentUser }: { currentUser: any }) {
 
             {/* Info Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {welcomeBonus > 0 && clicks.length === 0 && (
+              {welcomeBonus > 0 && (
                 <div className="bg-blue-50 border border-blue-100 rounded-2xl p-5 flex items-start">
                   <div className="h-10 w-10 bg-blue-100 rounded-xl flex items-center justify-center mr-4 flex-shrink-0">
                     <Trophy className="h-5 w-5 text-blue-900" />
@@ -1319,7 +1237,7 @@ export function Dashboard({ currentUser }: { currentUser: any }) {
                 <div>
                   <h3 className="text-white font-black text-xs uppercase tracking-wider">Secure Withdrawals</h3>
                   <p className="text-gray-400 text-[11px] mt-1 font-medium leading-relaxed">
-                    Minimum withdrawal is ₦300,000. Processed first Fridays.
+                    Minimum withdrawal is ₦250,000. Processed first Fridays.
                   </p>
                 </div>
               </div>
@@ -1587,7 +1505,7 @@ export function Dashboard({ currentUser }: { currentUser: any }) {
                         <div className="mb-6 bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start">
                           <Info className="h-4 w-4 text-amber-600 mt-0.5 mr-3 flex-shrink-0" />
                           <p className="text-amber-800 text-[11px] font-bold leading-relaxed uppercase tracking-tight">
-                            Payouts open first Fridays (8:00 AM - 10:00 AM UTC). Min ₦300k required.
+                            Payouts open first Fridays (8:00 AM - 10:00 AM UTC). Min ₦250k required.
                           </p>
                         </div>
                       )}
@@ -1642,19 +1560,19 @@ export function Dashboard({ currentUser }: { currentUser: any }) {
                           <input
                             type="number"
                             required
-                            min="300000"
+                            min="250000"
                             max={balance}
                             step="0.01"
                             value={withdrawAmount}
                             onChange={(e) => setWithdrawAmount(e.target.value)}
                             disabled={!canWithdraw || withdrawLoading}
                             className="block w-full border border-gray-200 rounded-xl py-2.5 px-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-900 transition-all disabled:bg-gray-50 disabled:text-gray-400 shadow-sm"
-                            placeholder="Min ₦300,000"
+                            placeholder="Min ₦250,000"
                           />
                         </div>
                         <button
                           type="submit"
-                          disabled={!canWithdraw || withdrawLoading || balance < 300000 || activationStatus !== 'approved'}
+                          disabled={!canWithdraw || withdrawLoading || balance < 250000 || activationStatus !== 'approved'}
                           className="w-full flex justify-center py-4 px-4 rounded-xl text-xs font-black uppercase tracking-widest text-white bg-blue-900 hover:bg-blue-950 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-900/20"
                         >
                           {withdrawLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm Withdrawal Request'}
@@ -1879,13 +1797,13 @@ export function Dashboard({ currentUser }: { currentUser: any }) {
                     <div className="flex items-center justify-between mb-2 px-1">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Email Address</label>
                       {!isEditingEmail ? (
-                        <button onClick={() => { setNewEmail(currentUser?.email || ''); setIsEditingEmail(true); setProfileError(''); setProfileSuccess(''); }} className="text-[10px] font-black text-blue-900 uppercase tracking-widest hover:underline">Change</button>
+                        <button onClick={() => { setNewEmail(auth.currentUser?.email || ''); setIsEditingEmail(true); setProfileError(''); setProfileSuccess(''); }} className="text-[10px] font-black text-blue-900 uppercase tracking-widest hover:underline">Change</button>
                       ) : (
                         <button onClick={() => setIsEditingEmail(false)} className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Cancel</button>
                       )}
                     </div>
                     {!isEditingEmail ? (
-                      <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4 text-sm font-bold text-gray-900">{currentUser?.email}</div>
+                      <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4 text-sm font-bold text-gray-900">{auth.currentUser?.email}</div>
                     ) : (
                       <form onSubmit={handleUpdateEmail} className="space-y-3">
                         <input
@@ -2094,13 +2012,13 @@ export function Dashboard({ currentUser }: { currentUser: any }) {
                   <Trophy className="h-8 w-8 text-yellow-300" />
                 </div>
                 <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Welcome to ClickAds!</h2>
-                <p className="text-blue-200 text-[10px] font-black uppercase tracking-widest mt-2">Registration Bonus Received</p>
+                <p className="text-blue-200 text-[10px] font-black uppercase tracking-widest mt-2">Earn rewards daily by completing tasks</p>
               </div>
               
               <div className="p-8 space-y-6">
                 <div className="bg-green-50 rounded-2xl p-6 border border-green-100 flex items-center justify-between">
                   <div>
-                    <p className="text-[10px] font-black text-green-800 uppercase tracking-widest">Sign-up Reward</p>
+                    <p className="text-[10px] font-black text-green-800 uppercase tracking-widest">Sign-up Reward Credited</p>
                     <p className="text-3xl font-black text-green-600 mt-1">₦80,000.00</p>
                   </div>
                   <CheckCircle className="h-10 w-10 text-green-600" />
@@ -2115,7 +2033,7 @@ export function Dashboard({ currentUser }: { currentUser: any }) {
                     {[
                       "Complete daily ad tasks to accumulate profits.",
                       "Perform a Daily Check-in to maintain your active status.",
-                      "Minimum withdrawal is set at ₦300,000 for all members.",
+                      "Minimum withdrawal is set at ₦250,000 for all members.",
                       "Payouts are processed on the First Friday of every month."
                     ].map((rule, i) => (
                       <li key={i} className="flex items-start text-[11px] font-bold text-gray-500 uppercase tracking-tight">
